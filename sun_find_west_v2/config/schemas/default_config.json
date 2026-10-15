@@ -60,7 +60,9 @@
             "grid_r": 300,
             "grid_r-desc": "中心円の半径(pixel)",
             "grid_alpha": 0.4,
-            "grid_alpha-desc": "画像グリッドの透明度(alpha)"
+            "grid_alpha-desc": "画像グリッドの透明度(alpha)",
+            "opencircle_triangle": false,
+            "opencircle_triangle-desc": "西との角度差を表示する円弧に矢印をつける"
         }
     }
 }

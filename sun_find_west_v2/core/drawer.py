@@ -9,24 +9,17 @@ else:
     logger.info("--- starting as module process ---")
 try:
     import time
-except ImportError:
-    logger.error("Failed to import standard module")
-    logger.error(traceback.format_exc())
-    raise
-
-try:
     from collections.abc import Callable
 
     import matplotlib.pyplot as plt
     import numpy as np
     from matplotlib.patches import Arc, Circle, Polygon
-    from matplotlib.widgets import Slider, Button
+    from matplotlib.widgets import Button, Slider
 except ImportError:
-    logger.error("Failed to import third-party module")
+    logger.error("Failed to import standard module")
     logger.error(traceback.format_exc())
     raise
 
-logger.info("Third-party modules imported successfully")
 
 __all__ = ["OpenCircleArrow", "Visualizer"]
 
@@ -50,17 +43,17 @@ def convert_angle_to_west(robust_angle: float) -> float:
 
 # 1. OpenCircleArrow クラス (描画パーツ)
 class OpenCircleArrow:
-    # NEXT:矢印の始点を水平ひだりに固定
     def __init__(
         self,
         ax,
         center=(0, 0),
         radius=1.0,
-        angle=90,  # gap_angleやstart_angleの代わりに直接角度を受け取る
+        angle=90,
         edgecolor="C0",
         lw=3,
         tri_size=0.12,
         tri_color="C0",
+        show_triangle=True,  # 矢じりの表示/非表示を制御するフラグを追加
     ):
         """
         インタラクティブにパラメーターを更新できる矢印付き円弧オブジェクト
@@ -68,11 +61,13 @@ class OpenCircleArrow:
         self.ax = ax
         self.center = center
         self.radius = radius
-        self.angle = angle  # -180 ~ 180度の角度
+        self.angle = angle
         self.edgecolor = edgecolor
         self.lw = lw
         self.tri_size = tri_size
         self.tri_color = tri_color
+        self.show_triangle = show_triangle
+        
         # 描画したパッチを保持する変数
         self.arc_patch = None
         self.tri_patch = None
@@ -85,22 +80,24 @@ class OpenCircleArrow:
         # すでに描画されている古いパッチがあれば削除する
         if self.arc_patch is not None:
             self.arc_patch.remove()
+            self.arc_patch = None
         if self.tri_patch is not None:
             self.tri_patch.remove()
+            self.tri_patch = None
 
         cx, cy = self.center
 
         # 尻を右(0度)に固定し、正負で矢じりの向きを反転
         if self.angle >= 0:
             # 正の角度（反時計回り）
-            arc_t1 = 0
-            arc_t2 = self.angle
+            arc_t1 = 180
+            arc_t2 = -1 * self.angle
             tangent_angle = self.angle + 90
             tip_angle = self.angle
         else:
             # 負の角度（時計回り）
-            arc_t1 = self.angle
-            arc_t2 = 0
+            arc_t1 = -1 * self.angle
+            arc_t2 = 180
             tangent_angle = self.angle - 90
             tip_angle = self.angle
 
@@ -118,22 +115,23 @@ class OpenCircleArrow:
         )
         self.ax.add_patch(self.arc_patch)
 
-        # 矢じりの計算
-        tip_rad = np.deg2rad(tip_angle)
-        ex = cx + self.radius * np.cos(tip_rad)
-        ey = cy + self.radius * np.sin(tip_rad)
+        # 矢じりの計算と生成 (show_triangleがTrueのときのみ描画)
+        if self.show_triangle:
+            tip_rad = np.deg2rad(tip_angle)
+            ex = cx + self.radius * np.cos(tip_rad)
+            ey = cy + self.radius * np.sin(tip_rad)
 
-        t_rad = np.deg2rad(tangent_angle)
+            t_rad = np.deg2rad(tangent_angle)
 
-        s = self.tri_size * self.radius
-        tri = np.array([[0.0, 0.0], [-s, s / 2], [-s, -s / 2]])
+            s = self.tri_size * self.radius
+            tri = np.array([[0.0, 0.0], [-s, s / 2], [-s, -s / 2]])
 
-        R = np.array([[np.cos(t_rad), -np.sin(t_rad)], [np.sin(t_rad), np.cos(t_rad)]])
-        tri_rot = (tri @ R.T) + np.array([ex, ey])
+            R = np.array([[np.cos(t_rad), -np.sin(t_rad)], [np.sin(t_rad), np.cos(t_rad)]])
+            tri_rot = (tri @ R.T) + np.array([ex, ey])
 
-        # 矢じり（多角形）の生成
-        self.tri_patch = Polygon(tri_rot, closed=True, color=self.tri_color)
-        self.ax.add_patch(self.tri_patch)
+            # 矢じり（多角形）の生成
+            self.tri_patch = Polygon(tri_rot, closed=True, color=self.tri_color)
+            self.ax.add_patch(self.tri_patch)
 
         # 画面の更新を促す
         if self.ax.figure and self.ax.figure.canvas:
@@ -161,6 +159,7 @@ class Visualizer:
         grid_nx=4,
         grid_r=300,
         grid_alpha=0.4,
+        opencircle_triangle=False
     ):
         self.width = width
         self.height = height
@@ -284,6 +283,7 @@ class Visualizer:
             angle=0,  # 初期角度
             edgecolor="purple",
             tri_color="purple",
+            show_triangle=opencircle_triangle
         )
 
         self.sliders = {}
@@ -294,11 +294,11 @@ class Visualizer:
         name: str,
         label: str,
         on_clicked: Callable,
-        position: list[float] | None = None,
+        position: tuple[float, float, float, float] | None = None,
     ) -> Button:
         """ボタンを追加する"""
         if position is None:
-            position = [0.02, 0.05, 0.07, 0.04]
+            position = (0.02, 0.05, 0.07, 0.04)
 
         ax_button = self.fig.add_axes(position)
         button = Button(ax_button, label)
@@ -318,13 +318,13 @@ class Visualizer:
         label: str | None = None,
         valfmt: str | None = None,  # 表示フォーマット (例: "%1.0f", "%1.2f")
     ) -> Slider:
+
         num_sliders = len(self.sliders)
 
-        bottom_margin = 0.15 + (num_sliders + 1) * 0.05
+        bottom_margin = 0.20 + (num_sliders + 1) * 0.05
         self.fig.subplots_adjust(bottom=bottom_margin)
-
-        y_pos = 0.05 + (num_sliders * 0.04)
-        ax_slider = self.fig.add_axes([0.2, y_pos, 0.6, 0.03])
+        y_pos = 0.12 + (num_sliders * 0.05)
+        ax_slider = self.fig.add_axes((0.25, y_pos, 0.6, 0.03))
 
         user_label = label if label is not None else name
         kwargs = {}
@@ -367,6 +367,7 @@ class Visualizer:
         r,
         recent_pts,
         robust_angle,
+        robust_vector,
         frame_idx=None,
         total_frames=None,
     ):
@@ -395,7 +396,6 @@ class Visualizer:
         else:
             # 2つの座標系、いずれも上が正,下が負で-180~+180
             west_angle = convert_angle_to_west(robust_angle)  # 左0°の座標
-            east_angle = robust_angle  # 右0°の座標
 
             # 許容範囲に応じて色を変更
             if abs(west_angle) < self.acceptable:
@@ -403,19 +403,17 @@ class Visualizer:
             else:
                 uxc = ("red", "purple")
 
-            east_rad = np.radians(east_angle)
-
-            # 角度からベクトルのX, Y成分を計算 (長さは self.sunline)
-            u = self.sunline * np.cos(east_rad)
-            v = self.sunline * np.sin(east_rad)
-
+            vectory,vectorx = robust_vector
+            u = self.sunline * vectorx
+            v = self.sunline * vectory
+            
             # 矢印の始点(cx, cy)とベクトル成分(u, v)を更新
             self.ax_sunline.set_offsets(np.c_[cx, cy])
             self.ax_sunline.set_UVC(u, v)
 
             self.arrow.update(
                 center=(cx, cy),
-                angle=east_angle,
+                angle=robust_angle,
                 edgecolor=uxc[1],
                 tri_color=uxc[1],
             )
@@ -512,14 +510,14 @@ if __name__ == "__main__":
         elif footstep_mode in ["1", "2"]:
             if footstep_mode == "1":
                 print(
-                    "文字を入力してください（終了するには Ctrl+D [Mac/Linux] または Ctrl+Z [Windows] を押してください）:"
+                    "Please enter text (press Ctrl+D [Mac/Linux] or Ctrl+Z [Windows] to finish).）:"
                 )
                 # すべての入力を一括で取得
                 input_footsteps = sys.stdin.read().replace("^Z", "").strip()
             elif footstep_mode == "2":
                 file_path = askopenfile(mode="r", filetypes=[("Text files", "*.txt")])
                 if file_path is None:
-                    print("ファイルが選択されませんでした。")
+                    print("No file was selected.")
                     sys.exit(1)
                 input_footsteps = file_path.read().strip()
             try:
@@ -550,7 +548,7 @@ if __name__ == "__main__":
                 try:
                     from RANSAC import calculate_west_angle_robust as west_angle
                 except ImportError:
-                    print("エラー: RANSACモジュールが見つかりません。")
+                    print("Error: RANSAC module not found.")
                     sys.exit(1)
 
             width, height = img_shape
@@ -559,13 +557,13 @@ if __name__ == "__main__":
             # Numpy配列化
             pts = np.array(footsteps)
 
-            # --- 変更点: 初めに一度だけRANSACで基準の角度を計算 ---
-            print("初期軌跡データからRANSACで基準角度を計算しています...")
+            # 初めに一度だけRANSACで基準の角度を計算 
+            print("The reference angle is calculated from the initial trajectory data using RANSAC...")
             west_re = west_angle(pts)
             if west_re is not None:
                 base_calculate, vectorYX = west_re
             else:
-                print("データが少なすぎます。")
+                print("There is too little data.")
                 sys.exit(1)
 
             # UI確認のため Visualizer を初期化
@@ -596,7 +594,7 @@ if __name__ == "__main__":
             num_frames = len(footsteps)
 
             print(
-                f"デモを開始します (FPS: {fps})。グラフウィンドウを閉じるかCtrl+Cで終了します。"
+                f"Starting the demo (FPS: {fps}). Close the graph window or press Ctrl+C to exit."
             )
 
             # アニメーションループ
@@ -625,7 +623,10 @@ if __name__ == "__main__":
                     # 角度は「初期計算値 + スライダーの回転量」で決定
 
                     robust_angle = base_calculate + angle_deg
-
+                    rad=np.radians(robust_angle)
+                    vecx=np.cos(rad)
+                    vecy=np.sin(rad)
+                    vector=vecx,vecy
                     # 描画更新（frame_idx を渡すように変更）
                     viz.update(
                         black_img,
@@ -634,6 +635,7 @@ if __name__ == "__main__":
                         radius,
                         recent_pts,
                         robust_angle,
+                        robust_vector=vector,
                         frame_idx=frame_idx,
                     )
 

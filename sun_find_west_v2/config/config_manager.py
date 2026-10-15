@@ -1,44 +1,38 @@
 # part1 importing modules
-import logging
 import datetime
+import logging
 import sys
 from pathlib import Path
 
-"""GUISET = False
-if GUISET:
-"""
-
 update_basedon_textconfig = False
+logger = logging.getLogger(__name__)
 
 if __name__ == "__main__":
     CONFIG_ROOT = Path(__file__).parent.resolve()
     sys.path.append(str(CONFIG_ROOT))
 
-    logfile = Path(f"logs/config_{datetime.datetime.now().strftime('%Y-%m-%d')}.log")
+    logpath = Path(f"logs/config_{datetime.datetime.now().strftime('%Y-%m-%d')}.log")
 
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s %(funcName)s: %(message)s",
-        filename=logfile,
+        filename=logpath,
         filemode="a",
     )
-    # ========
     update_basedon_textconfig = True
-    # ========
-    if not logfile.parent.exists():
-        logfile.parent.mkdir(parents=True, exist_ok=True)
+    if not logpath.parent.exists():
+        logpath.parent.mkdir(parents=True, exist_ok=True)
         logger.debug(f"Created directory: {logpath.parent}")
-        
-    from pathes import pathes
-    from utils_json import json_saver, json_loader, sha256_valid
-    from cache_update import generate_configJ_configT
-    
-    
-else:
 
-    from config.pathes import pathes
-    from config.utils_json import json_saver, json_loader, sha256_valid
+    from cache_update import generate_configJ_configT
+    from pathes import pathes
+    from utils_json import json_loader, sha256_valid
+
+
+else:
     from config.cache_update import generate_configJ_configT
+    from config.pathes import pathes
+    from config.utils_json import json_loader, sha256_valid
 logger = logging.getLogger(__name__)
 CONFIG_JSON_PATH = pathes["CONFIG_JSON_PATH"]
 CONFIG_TEXT_PATH = pathes["CONFIG_TEXT_PATH"]
@@ -70,7 +64,7 @@ def industrial(config: dict, default_config: dict, default_outline: dict) -> dic
         try:
             parent_config = config[hk]
         except KeyError:
-            logger.debug(f"__found not {hk},use default value")
+            logger.debug(f"Item {hk} was not found. Using the default value.")
             buried_no_desc[hk] = default_config[hk]
             continue
 
@@ -79,7 +73,7 @@ def industrial(config: dict, default_config: dict, default_outline: dict) -> dic
             try:
                 current_config = parent_config[hhk]
             except KeyError:
-                logger.debug(f"__found not {hk}>{hhk},use default value")
+                logger.debug(f"Item {hk}>{hhk} was not found. Using the default value.")
                 data_h1[hhk] = default_config[hk][hhk]
                 continue
             data_h2 = {}
@@ -97,29 +91,32 @@ def industrial(config: dict, default_config: dict, default_outline: dict) -> dic
 # textをjson形式に変換し、jsonファイルを生成
 try:
     generate_configJ_configT(CONFIG_JSON_PATH, CONFIG_TEXT_PATH)
-    logger.info("__sucessful jenelate json from text")
+    logger.info("Successfully generated JSON from text.")
 except (KeyError, ValueError):
-    logger.exception("__config text not TEKISETU")
-    logger.info("__try load parameter from config json")
+    logger.exception("The format of the text setting is incorrect.")
+    logger.info("Attempting to load parameters from the configuration JSON...")
 
 # textからの読み込みに失敗したときは前回までのプロパティで実行する。
 # 生成したjsonを読み込む
 try:
-    logger.info("__loading config from json")
+    logger.info("Loading settings from JSON...")
     config = json_loader(CONFIG_JSON_PATH)
-except:
-    logger.error("__failed loading config from json")
+except Exception:
+    config = {}
+    logger.warning("Failed to load settings from JSON.")
 
 
 #   for bury the empty,prepare defult json
 
 # defaultのjsonとoutlineを空埋め用に読み込む
+default_config = {}
+outline = {}
 try:
     default_config = json_loader(DEFAULT_JSON_PATH)
     outline = json_loader(OUTLINE_JSON_PARH)
-    logger.info("__sucessful default_config")
-except:
-    logger.warning("__failed loading default_config")
+    logger.info("Successfully loaded default_config.")
+except Exception:
+    logger.critical("Failed to load default_config.")
 
 if "__main__" == __name__:
     file_update_check(pathes, True)

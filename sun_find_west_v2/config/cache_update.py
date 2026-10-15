@@ -1,8 +1,12 @@
 import logging
 from pathlib import Path
 
-from config.utils_json import sha256_file, json_loader, json_saver
-from config.pathes import pathes
+if __name__ == "__main__":
+    from pathes import pathes
+    from utils_json import json_loader, json_saver, sha256_file
+else:
+    from config.pathes import pathes
+    from config.utils_json import json_loader, json_saver, sha256_file
 
 logger = logging.getLogger(__name__)
 
@@ -12,7 +16,7 @@ def generate_defaultJ_schemaJ(defaultpath: Path, schemapath: Path) -> dict:
     schema = json_loader(schemapath)
 
     if schema.get("type") != "object" or "properties" not in schema:
-        msg = "_ENG_スキーマの形式が適切ではありません (ルートは 'properties' を持つ 'object' である必要があります)"
+        msg = "The schema format is invalid (the root must be an 'object' with 'properties')."
         logger.error(f"{msg}")
         raise ValueError(msg)
 
@@ -31,7 +35,7 @@ def generate_defaultJ_schemaJ(defaultpath: Path, schemapath: Path) -> dict:
     try:
         data = get_default_properties(schema["properties"])
     except Exception as e:
-        logger.error(f"_ENG_スキーマの解析中にエラーが発生しました: {e}")
+        logger.error(f"An error occurred while parsing the schema.: {e}")
         raise
 
     json_saver(data, defaultpath)
@@ -80,7 +84,7 @@ def generate_outlinesJ_defaultJ(outlinepath: Path, defaultpath: Path) -> dict:
     for hk, hv in data.items():
         ls_h2 = {}
         for hhk, hhv in hv.items():
-            ls_h2[hhk] = [k for k in hhv.keys() if not k.endswith("-desc")]
+            ls_h2[hhk] = [k for k in hhv if not k.endswith("-desc")]
         outline[hk] = ls_h2
 
     return json_saver(outline, outlinepath)
@@ -113,7 +117,7 @@ def generate_configJ_configT(configpath: Path, textpath: Path) -> dict:
         if line[:3] == "===":
             if stash:
                 data_h2[h2] = stash
-                stash={}
+                stash = {}
             if data_h2:
                 data_h1[h1] = data_h2
             h1 = line.split("===")[1]
@@ -131,13 +135,13 @@ def when_updated_schemaJ(pathes: dict, reset_userset: bool) -> dict:
     generate_outlinesJ_defaultJ(
         pathes["OUTLINE_JSON_PARH"], pathes["DEFAULT_JSON_PATH"]
     )
-    logger.info("__sucessful update default&outline jsons")
+    logger.info("Successfully updated the default outline JSON.")
     if reset_userset:
-        logger.info("__reseting user setting")
+        logger.info("Resetting user settings...")
         generate_configT_defaultJ(
             pathes["DEFAULT_JSON_PATH"], pathes["CONFIG_TEXT_PATH"]
         )
-        logger.info("__sucessful reset user setting")
+        logger.info("User settings successfully reset.")
     return json_loader(pathes["CONFIG_SCHEMA_PATH"])
 
 
@@ -145,5 +149,5 @@ if __name__ == "__main__":
     import sys
 
     CONFIG_ROOT = Path(__file__).parent.resolve()
-    sys.path.append(CONFIG_ROOT)
+    sys.path.append(str(CONFIG_ROOT))
     when_updated_schemaJ(pathes, True)

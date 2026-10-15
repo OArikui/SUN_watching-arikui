@@ -1,14 +1,10 @@
+import hashlib
 import json
 import logging
-import hashlib
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
-
-from config.pathes import pathes
-
-globals().update(pathes)
 
 
 def json_loader(jsonpath: Path) -> dict:
@@ -46,13 +42,14 @@ def sha256_file(filepath: Path, save: bool = True) -> str:
     h = hashlib.sha256()
     with open(filepath, "rb") as f:
         for chunk in iter(lambda: f.read(8192), b""):
+            assert isinstance(chunk, bytes)
             h.update(chunk)
     hashV = h.hexdigest()
 
     if save:
         savepath = filepath.parent / f"{filepath.name}_valid"
         with open(savepath, "a", encoding="ascii") as f:
-            f.write(f"{datetime.now(timezone.utc)}\n{hashV}\n")
+            f.write(f"{datetime.now(UTC)}\n{hashV}\n")
     return hashV
 
 
@@ -64,5 +61,5 @@ def sha256_valid(filepath: Path) -> bool:
             expected = f.readlines()[-1]
     else:
         expected = None
-        logger.debug(f"__hash not found :{Path}")
+        logger.debug(f"hash not found :{Path}")
     return actual == expected

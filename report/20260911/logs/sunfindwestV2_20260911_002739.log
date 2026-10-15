@@ -1,0 +1,31 @@
+2026-09-11 00:27:39,292 [INFO] __main__ <module>: Importing standard modules...
+2026-09-11 00:27:39,295 [DEBUG] __main__ <module>: All standard modules imported successfully.
+2026-09-11 00:27:39,507 [INFO] __main__ <module>: Third-party modules imported successfully.
+2026-09-11 00:27:39,513 [INFO] camera.controller <module>: --- starting as module process ---
+2026-09-11 00:27:39,514 [INFO] camera.controller <module>: standard modules imported successfully
+2026-09-11 00:27:39,554 [INFO] camera.controller <module>: --- finish ---
+2026-09-11 00:27:39,590 [INFO] config.utils_json json_saver: Saving JSON to E:\projects\SUN_watching\sun_find_west_v2\config\cache\config.json
+2026-09-11 00:27:39,594 [INFO] config.utils_json json_saver: JSON saved successfully: E:\projects\SUN_watching\sun_find_west_v2\config\cache\config.json
+2026-09-11 00:27:39,595 [INFO] config.config_manager <module>: __sucessful jenelate json from text
+2026-09-11 00:27:39,595 [INFO] config.config_manager <module>: __loading config from json
+2026-09-11 00:27:39,598 [INFO] config.config_manager <module>: __sucessful default_config
+2026-09-11 00:27:39,604 [INFO] core.drawer <module>: --- starting as module process ---
+2026-09-11 00:27:39,908 [DEBUG] matplotlib wrapper: matplotlib data path: C:\Users\mango\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\matplotlib\mpl-data
+2026-09-11 00:27:39,922 [DEBUG] matplotlib wrapper: CONFIGDIR=C:\Users\mango\AppData\Local\matplotlib
+2026-09-11 00:27:39,924 [DEBUG] matplotlib <module>: interactive is False
+2026-09-11 00:27:39,925 [DEBUG] matplotlib <module>: platform is win32
+2026-09-11 00:27:40,001 [DEBUG] matplotlib wrapper: CACHEDIR=C:\Users\mango\AppData\Local\matplotlib
+2026-09-11 00:27:40,009 [DEBUG] matplotlib.font_manager _load_fontmanager: Using fontManager instance from C:\Users\mango\AppData\Local\matplotlib\fontlist-v3.11.0.json
+2026-09-11 00:27:40,547 [INFO] core.drawer <module>: Third-party modules imported successfully
+2026-09-11 00:27:40,548 [INFO] core.drawer <module>: --- finish ---
+2026-09-11 00:27:40,552 [INFO] core.RANSAC <module>: --- starting as module process ---
+2026-09-11 00:27:43,174 [INFO] core.RANSAC <module>: standard modules imported successfully
+2026-09-11 00:27:43,175 [INFO] core.RANSAC <module>: --- finish ---
+2026-09-11 00:27:43,176 [DEBUG] __main__ <module>: All custom modules imported successfully.
+2026-09-11 00:27:43,176 [INFO] __main__ <module>: __sucessful __loading parameter
+2026-09-11 00:27:43,177 [INFO] __main__ <module>: Attempting to connect to the camera...
+2026-09-11 00:27:43,177 [DEBUG] __main__ <module>: Successfully set ZWO_ASI_LIB environment variable:E:\projects\SUN_watching\sun_find_west_v2\camera\bin\ASICamera2.dll
+2026-09-11 00:27:43,177 [INFO] camera.controller connect_camera: ダミーモードとして接続処理をskipします
+2026-09-11 00:27:50,681 [CRITICAL] __main__ <module>: Failed to connect to the camera: 動画ファイルが選択されませんでした。
+2026-09-11 00:27:50,682 [INFO] __main__ cancel_process: ===== canceling process and cleaning up =====
+2026-09-11 00:27:50,736 [INFO] __main__ cancel_process: ===== FINISHED =====

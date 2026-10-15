@@ -12,6 +12,8 @@ else:
 try:
     import os
     import time
+    from pathlib import Path
+
 except ImportError:
     logger.error("Failed to import standard module")
     logger.error(traceback.format_exc())
@@ -19,26 +21,22 @@ except ImportError:
 else:
     logger.info("standard modules imported successfully")
 
-try:
-    from camera.vid_dummy import VideoDummyCamera
-
-    HAS_VID_DUMMY = True
-except ImportError:
-    HAS_VID_DUMMY = False
-    VideoDummyCamera = None
+type VideoDummyCameraType = VideoDummyCamera
 
 try:
-    import zwoasi as asi
+    from camera.vid_dummy import VideoDummyCamera, asi
 except ImportError:
-    logger.error("Failed to import zwoasi module")
-    logger.error(traceback.format_exc())
+    logger.critical("no module to be asi")
     raise
-else:
-    logger.info("zwoasi modules imported successfully")
-    
+
+try:
+    ONLY_DUMMY = asi.dum # pyright: ignore[reportAttributeAccessIssue]
+except AttributeError:
+    ONLY_DUMMY = False
+
+
 def check_stdin_input() -> str:
     """標準入力から1行（Enterまで）を非ブロックで取得するヘルパー関数"""
-    input_str = ""
     if os.name == "nt":  # Windows環境
         import msvcrt
 
@@ -56,12 +54,20 @@ def check_stdin_input() -> str:
             return line.strip()
     return ""
 
-def connect_camera(dll_path):
+
+def connect_camera(dll_path: Path) -> asi.Camera | VideoDummyCamera | None:
     """
     ASIカメラの初期化と接続待機を行うモジュール
     """
+
+    if ONLY_DUMMY and VideoDummyCamera is not None:
+        logger.info("ダミーモードとして接続処理をskipします")
+        time.sleep(1)
+        dummy_cam = VideoDummyCamera()
+        return dummy_cam
+
     # 1. DLLパスの存在確認
-    if not os.path.exists(dll_path):
+    if not dll_path.exists():
         logger.error(
             f"DLL not found: {dll_path}. Please place the 64-bit ASICamera2.dll at this path."
         )
@@ -91,20 +97,21 @@ def connect_camera(dll_path):
         while True:
             # 標準入力の入力を非ブロックで確認
             user_input = check_stdin_input()
-            if user_input:
-                if user_input == "DUMVID":
-                    if HAS_VID_DUMMY:
-                        logger.info("DUMVID received. Returning VideoDummyCamera instance.")
-                        try:
-                            # vid_dummy (VideoDummyCamera) のインスタンスを作成して返す
-                            dummy_cam = VideoDummyCamera()
-                            return dummy_cam
-                        except Exception as e:
-                            logger.error(f"Failed to initialize VideoDummyCamera: {e}")
-                    else:
-                        print("\n[INFO] ダミーコード(DUMVID)が入力されましたが、vid_dummy モジュールをインポートできませんでした。")
-                        logger.warning("DUMVID received, but vid_dummy is not available.")
-                        
+            if user_input == "DUMVID":
+                if VideoDummyCamera is not None:
+                    logger.info("DUMVID received. Returning VideoDummyCamera instance.")
+                    try:
+                        # vid_dummy (VideoDummyCamera) のインスタンスを作成して返す
+                        dummy_cam = VideoDummyCamera()
+                        return dummy_cam
+                    except Exception as e:
+                        logger.error(f"Failed to initialize VideoDummyCamera: {e}")
+                else:
+                    print(
+                        "\n[INFO] ダミーコード(DUMVID)が入力されましたが、vid_dummy モジュールをインポートできませんでした。"
+                    )
+                    logger.warning("DUMVID received, but vid_dummy is not available.")
+
             try:
                 cameras = asi.list_cameras()
             except (asi.ZWO_Error, OSError):
@@ -169,7 +176,7 @@ control_map = {
 }
 
 
-def apply_camera_config(cam: asi.Camera, config: dict):
+def apply_camera_config(cam:asi.Camera | VideoDummyCamera, config: dict) -> None:
     """ZWO ASIカメラの各種パラメータを一括で設定する関数
 
     cam: 初期化済みの zwoasi.Camera インスタンス
@@ -183,7 +190,7 @@ def apply_camera_config(cam: asi.Camera, config: dict):
     height = config.get("height", "max")
     if height == "max":
         height = props["MaxHeight"]
-    bins = config.get("bins")
+    bins = config.get("bins",1)
     img_type_str = str(config.get("img_type", "RAW8")).upper()
     img_type = IMG_TYPE_MAP.get(img_type_str, asi.ASI_IMG_RAW8)
 
@@ -205,13 +212,12 @@ def apply_camera_config(cam: asi.Camera, config: dict):
                     val = int(val)
                 try:
                     cam.set_control_value(control_type, val)
-                except asi.ZWO_Error as e:
+                except asi.ZWO_Error:
                     logger.exception(
                         f" __ENG{key} の設定に失敗しました (範囲外の値などの可能性)"
                     )
             else:
                 logger.warning(f"__ENGこのカメラは{key}に対応していません")
-                pass
 
     logger.info("__sucessful set camera config")
 
@@ -239,7 +245,7 @@ def handle_config(cam: asi.Camera, key: int, val: float) -> None:
     ASI_FAN_ON
     ASI_ANTI_DEW_HEATER"""
     try:
-        camset_control_value(key, int(val))
+        cam.set_control_value(key, int(val))
         logger.debug(f"{key} updated to: {int(val)}")
     except asi.ZWO_Error as e:
         logger.error(f"Failed to update {key}: {e}")

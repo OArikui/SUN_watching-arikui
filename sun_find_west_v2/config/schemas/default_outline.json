@@ -37,7 +37,8 @@
             "grid_ny",
             "grid_nx",
             "grid_r",
-            "grid_alpha"
+            "grid_alpha",
+            "opencircle_triangle"
         ]
     }
 }

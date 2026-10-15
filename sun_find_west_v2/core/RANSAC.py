@@ -79,7 +79,7 @@ def calculate_west_angle_robust(
     angle_deg: float = math.degrees(angle_rad)
 
     vectorYX = vy, vx
-    return angle_deg, vectorYX
+    return -1*angle_deg, vectorYX
 
 
 # --- テスト実行と描画 ---
@@ -109,12 +109,12 @@ if __name__ == "__main__":
     result = calculate_west_angle_robust(noisy_trajectory)
 
     if result is None:
-        print("データが不足しています")
+        print("There is insufficient data.")
         sys.exit()
     else:
         robust_angle, (vy, vx) = result
-        print(f"単純計算の角度: {simple_angle:.2f} 度")
-        print(f"RANSACによるロバストな角度: {robust_angle:.2f} 度")
+        print(f"The perspective of a simple calculation: {simple_angle:.2f} degree")
+        print(f"Robust Angle Estimation via RANSAC: {robust_angle:.2f} degree")
 
     # --- matplotlib による描画処理 ---
     plt.figure(figsize=(8, 8))
@@ -158,19 +158,19 @@ if __name__ == "__main__":
     try:
         len_robust = math.hypot(
             vx,
-            vy,  
+            vy,
         )
         plt.quiver(
             center_x,
             center_y,
-            (vx / len_robust) * 3,  
-            (vy / len_robust) * 3,  
+            (vx / len_robust) * 3,
+            (vy / len_robust) * 3,
             angles="xy",
             scale_units="xy",
             scale=1,
             color="darkblue",
             width=0.008,
-            label=f"RANSAC Vector ({robust_angle:.1f}°)",  
+            label=f"RANSAC Vector ({robust_angle:.1f}°)",
         )
     except NameError:
         # robust_angleが定義されていない場合（データ不足など）

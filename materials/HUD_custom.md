@@ -7,16 +7,15 @@
 
 ```python
 self.hud_style = {
-    "x": 0.02,                  # 画面左端からの位置 (0.0 ~ 1.0)
-    "y": 0.98,                  # 画面下端からの位置 (0.0 ~ 1.0)
-    "ha": "left",               # 水平方向の揃え (left, center, right)
-    "va": "top",                # 垂直方向の揃え (top, center, bottom)
-    "fontsize": 13,             # 文字サイズ
-    "color": "#00FF00",         # 文字色
-    "family": "monospace",      # フォント
-    "bbox": dict(...)           # 背景パネルの設定
+    "x": 0.02,  # 画面左端からの位置 (0.0 ~ 1.0)
+    "y": 0.98,  # 画面下端からの位置 (0.0 ~ 1.0)
+    "ha": "left",  # 水平方向の揃え (left, center, right)
+    "va": "top",  # 垂直方向の揃え (top, center, bottom)
+    "fontsize": 13,  # 文字サイズ
+    "color": "#00FF00",  # 文字色
+    "family": "monospace",  # フォント
+    "bbox": dict(...),  # 背景パネルの設定
 }
-
 ```
 
 ## 各パラメータの調整方法

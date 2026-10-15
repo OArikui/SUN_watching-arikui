@@ -39,3 +39,4 @@ grid_ny    : 2      /画像グリッドの縦分割数
 grid_nx    : 4      /画像グリッドの横分割数
 grid_r     : 300    /中心円の半径(pixel)
 grid_alpha : 0.4    /画像グリッドの透明度(alpha)
+opencircle_triangle : False  /西との角度差を表示する円弧に矢印をつける

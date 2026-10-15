@@ -203,7 +203,13 @@
               "maximum": 1,
               "default": 0.4,
               "description": "画像グリッドの透明度(alpha)"
+            },
+            "opencircle_triangle": {
+              "type": "boolean",
+              "default": false,
+              "description": "西との角度差を表示する円弧に矢印をつける"
             }
+            
           }
         }
       }

@@ -132,7 +132,7 @@ def show_circle(
                     iteration_count=iteration_count,
                     is_last=is_last
                 )
-        return None
+        return
 
     if isinstance(img_inst, str):
         if img_inst == "GLOBAL":
@@ -160,9 +160,9 @@ def show_circle(
         img = img_inst
 
     if img_path is not None:
-        img_path_str = str(img_path)
+        str(img_path)
     else:
-        img_path_str = None
+        pass
     # デフォルト引数のミュータブル回避
     if spots is None:
         spots = []
