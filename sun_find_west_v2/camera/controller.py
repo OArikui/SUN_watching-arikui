@@ -48,7 +48,7 @@ def connect_camera(
     if not ZWOASI_AVAILABLE:
         msg = (
             "zwoasi がインストールされていません。実機カメラを使うには zwoasi を導入するか、"
-            "userSet の Run>dummy_camera を True にしてください。"
+            "config.yaml の Run>camera_source>dummy_camera を true にしてください。"
         )
         logger.critical(msg)
         raise RuntimeError(msg)

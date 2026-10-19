@@ -1,0 +1,69 @@
+# SUN_watching sun_find_west_v2 設定ファイル
+#
+# run.py が起動時に読み込み、config_schema.json で検証したうえで main() に渡す。
+# 項目の欠落・未知の項目・範囲外の値はすべて起動時エラーになる(補完はしない)。
+# 別の設定ファイルを使うときは: python run.py --config path/to/config.yaml
+
+Camera:
+  basic_parameters:
+    # ASI_EXPOSURE: 露出時間 (μs)。ASI432MMスペック範囲: 32μs〜2000s。ND5.0太陽観測用推奨: 100〜1000
+    exposure: 100
+    # ASI_GAIN: ゲイン (0〜400)。太陽観測は基本0。HCGモードはGain 140で自動ON(低ノイズ化)
+    gain: 0
+    # ASI_OFFSET or ASI_BRIGHTNESS: オフセット (黒レベルの切り捨て防止)
+    offset: 15
+    # ASI_GAMMA: ガンマ補正値 (50=補正なし リニア特性維持)
+    gamma: 50
+  transfer_settings:
+    # ASI_BANDWIDTHOVERLOAD: USB3.0転送帯域幅の制限 (%)
+    band_width: 80
+    # ASI_HIGH_SPEED_MODE: ハイスピードモード (グローバルシャッター120fps動作用)
+    high_speed_mode: true
+    # ASI_HARDWARE_BIN: ハードウェアビンニング (9.0μmの大ピクセルのため基本1)
+    hardware_bin: 1
+    # ASI_FLIP: 画像反転 (0:なし, 1:水平, 2:垂直, 3:両方)
+    flip: 0
+  auto_control:
+    # ASI_AUTO_MAX_GAIN: 自動ゲイン上限 (解析時の閾値維持のため固定値運用時は0)
+    auto_max_gain: 0
+    # ASI_AUTO_MAX_EXP: 自動露出上限 (ms)
+    auto_max_exp: 1
+    # ASI_AUTO_TARGET_BRIGHTNESS: 自動露出の目標明るさ
+    auto_target_brightness: 100
+  image_format:
+    # img_type: 画像フォーマット (ASI432MMはモノクロ専用。高速解析はRAW8、高階調は12bit RAW16)
+    img_type: RAW8
+
+Run:
+  camera_source:
+    # ダミーカメラ(動画ファイル再生)を使う。true=ダミー, false=実機ASIカメラ(zwoasi必須)
+    dummy_camera: false
+
+sun_find_west_v2:
+  Analyzer:
+    # 許容角度(degree)
+    acceptable: 1
+    # 軌道推定に使うフレーム数
+    buf_lookback: 300
+  MIN2ver2:
+    # 画像格子の分割数
+    n: 10
+    # 太陽の明るさの基準しきい値,格子線が太陽像上を通るかの判定に用いる
+    light_threshod: 50
+    # 太陽の縁の幅の基準値(pix)
+    limb_wigth: 24
+    # 黒点排除のイテレーション回数。複数の黒点に対応できます。0なら排除なし
+    iter_cycles: 2
+  Visualizer:
+    # 画像グリッドの色(hex)。YAMLでは # がコメントになるため必ず引用符で囲むこと
+    grid_color: "#FFFFFF"
+    # 画像グリッドの縦分割数
+    grid_ny: 2
+    # 画像グリッドの横分割数
+    grid_nx: 4
+    # 中心円の半径(pixel)
+    grid_r: 300
+    # 画像グリッドの透明度(alpha)
+    grid_alpha: 0.4
+    # 西との角度差を表示する円弧に矢印をつける
+    opencircle_triangle: false

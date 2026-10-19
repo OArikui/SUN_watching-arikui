@@ -110,8 +110,6 @@ try:
         connect_camera,
         handle_config,
     )
-    from config.config_manager import parameter
-    from config.run_options import get_run_options
     from core.drawer import Visualizer
     from core.MIN2ver2 import MIN2_ignore_sunspots as MIN2
     from core.RANSAC import calculate_west_angle_robust as west_angle
@@ -121,65 +119,6 @@ except ImportError:
     cancel_process()
 else:
     logger.debug("All custom modules imported successfully.")
-
-logger.debug(f"loaded parameters:\n{pformat(parameter)}")
-
-print("Loading parameters...")
-try:
-    camera_param = parameter["Camera"]
-    main_param = parameter["sun_find_west_v2"]
-    visualizer_constract_param = main_param["Visualizer"]
-    visualizer_constract_param["acceptable"] = main_param["Analyzer"]["acceptable"]
-except RuntimeError:
-    logger.exception("Failed to load parameters.")
-    cancel_process()
-logger.info("Successfully loaded parameters.")
-
-# カメラ接続と設定
-print("Implementing parameters...")
-logger.info("Attempting to connect to the camera...")
-camera = None
-try:
-    env_filename = root_path / "camera" / "bin" / "ASICamera2.dll"
-    os.environ["ZWO_ASI_LIB"] = str(env_filename)
-    logger.debug(f"Successfully set ZWO_ASI_LIB environment variable:{env_filename}")
-
-    # ダミーカメラの使用有無は run.py が決める (main.py 単体起動は不可)
-    run_options = get_run_options()
-    logger.info(f"dummy_camera={run_options.dummy_camera}")
-    camera = connect_camera(env_filename, use_dummy=run_options.dummy_camera)
-except KeyboardInterrupt:
-    logger.info("Connection wait interrupted by user.")
-    cancel_process()
-except (RuntimeError, ValueError) as e:
-    # 実行オプション未設定 / zwoasi未導入 / ダミー動画の未選択など
-    logger.critical(f"Failed to set up the camera: {e}")
-    cancel_process(camera=camera)
-except asi.ZWO_CaptureError as e:
-    logger.critical(f"Failed to connect to the camera: {e}")
-    cancel_process(camera=camera)
-else:
-    logger.info("Successfully connected to the camera.")
-
-if camera is not None:
-    flatten_param = {}
-    for hhv in camera_param.values():
-        flatten_param.update(hhv)
-
-    apply_camera_config(camera, flatten_param)
-    logger.info("Starting video capture...")
-    try:
-        camera.start_video_capture()
-        width, height, binning, img_type = camera.get_roi_format()
-        logger.debug(
-            f"Capture status retrieved: width={width}, height={height}, binning={binning}, img_type={img_type}"
-        )
-    except asi.ZWO_Error as e:
-        logger.critical(f"Failed to start video capture or retrieve ROI: {e}")
-        cancel_process(camera=camera)
-else:
-    logger.critical("Camera connection failed.")
-    cancel_process()
 
 # 補助関数と保存先設定
 # 画像フォーマットとNumPyデータ型のマッピング
@@ -209,10 +148,6 @@ def frame_to_image(frame: bytes, width: int, height: int, img_type: int) -> np.n
     if channels == 1:
         return arr.reshape(height, width)
     return arr.reshape(height, width, channels)
-
-
-cap_dir = reports_path / "captures"
-cap_dir.mkdir(parents=True, exist_ok=True)
 
 
 # SunTrackerApp クラス定義
@@ -492,39 +427,109 @@ class SunTrackerApp:
 
 # メインエントリポイント
 
-if __name__ == "__main__":
+CSV_HEADERS = [
+    "timestamp_iso",
+    "timestamp_unix",
+    "frame_count",
+    "temperature_c",
+    "gain",
+    "exposure_us",
+    "cx",
+    "cy",
+    "r",
+    "robust_angle",
+]
+
+
+def main(config: dict) -> None:
+    """検証済みの設定を受け取り、カメラ接続から解析ループまでを実行する。
+
+    設定の読み込みと検証は run.py が行う。この関数は設定ファイルに触れない。
+
+    Args:
+        config: ``config.loader.load_config`` が返した検証済みの設定 (Camera / Run /
+            sun_find_west_v2 の各セクションを持つ dict)
+    """
+    logger.debug(f"loaded config:\n{pformat(config)}")
+
+    print("Loading parameters...")
+    try:
+        camera_param = config["Camera"]
+        dummy_camera = config["Run"]["camera_source"]["dummy_camera"]
+        main_param = config["sun_find_west_v2"]
+        visualizer_constract_param = dict(main_param["Visualizer"])
+        visualizer_constract_param["acceptable"] = main_param["Analyzer"]["acceptable"]
+    except (KeyError, TypeError):
+        logger.exception("Failed to load parameters.")
+        cancel_process()
+    logger.info("Successfully loaded parameters.")
+
+    # カメラ接続と設定
+    print("Implementing parameters...")
+    logger.info("Attempting to connect to the camera...")
+    camera = None
+    try:
+        env_filename = root_path / "camera" / "bin" / "ASICamera2.dll"
+        os.environ["ZWO_ASI_LIB"] = str(env_filename)
+        logger.debug(f"Successfully set ZWO_ASI_LIB environment variable:{env_filename}")
+
+        logger.info(f"dummy_camera={dummy_camera}")
+        camera = connect_camera(env_filename, use_dummy=dummy_camera)
+    except KeyboardInterrupt:
+        logger.info("Connection wait interrupted by user.")
+        cancel_process()
+    except (RuntimeError, ValueError) as e:
+        # zwoasi未導入 / ダミー動画の未選択など
+        logger.critical(f"Failed to set up the camera: {e}")
+        cancel_process(camera=camera)
+    except asi.ZWO_CaptureError as e:
+        logger.critical(f"Failed to connect to the camera: {e}")
+        cancel_process(camera=camera)
+    else:
+        logger.info("Successfully connected to the camera.")
+
     if camera is None:
-        logger.critical("Cannot proceed without initialized camera")
-        sys.exit(1)
+        logger.critical("Camera connection failed.")
+        cancel_process()
+
+    flatten_param = {}
+    for hhv in camera_param.values():
+        flatten_param.update(hhv)
+
+    apply_camera_config(camera, flatten_param)
+    logger.info("Starting video capture...")
+    try:
+        camera.start_video_capture()
+        width, height, binning, img_type = camera.get_roi_format()
+        logger.debug(
+            f"Capture status retrieved: width={width}, height={height}, binning={binning}, img_type={img_type}"
+        )
+    except asi.ZWO_Error as e:
+        logger.critical(f"Failed to start video capture or retrieve ROI: {e}")
+        cancel_process(camera=camera)
+
+    cap_dir = reports_path / "captures"
+    cap_dir.mkdir(parents=True, exist_ok=True)
 
     logger.info("Initializing Visualizer instance...")
 
     csv_file_path = reports_path / f"sun_data_{ts}_BYsunfindwestV2.csv"
     logger.info(f"csv_file_path: {csv_file_path}")
 
-    csv_headers = [
-        "timestamp_iso",
-        "timestamp_unix",
-        "frame_count",
-        "temperature_c",
-        "gain",
-        "exposure_us",
-        "cx",
-        "cy",
-        "r",
-        "robust_angle",
-    ]
-
     viz = Visualizer(width, height, **visualizer_constract_param)
 
-    img_info = (width, height, img_type)
     app = SunTrackerApp(
         camera=camera,
         viz=viz,
         main_param=main_param,
         csv_file_path=csv_file_path,
         cap_dir=cap_dir,
-        img_info=img_info,
+        img_info=(width, height, img_type),
     )
 
-    app.run(csv_headers)
+    app.run(CSV_HEADERS)
+
+
+if __name__ == "__main__":
+    # 設定の読み込みは run.py の責務。main.py 単体では起動しない。
+    sys.exit("main.py は直接実行できません。run.py から起動してください: python run.py")

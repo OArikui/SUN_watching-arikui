@@ -1,0 +1,277 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SUN_watching-sun_find_west_v2 config",
+  "type": "object",
+  "properties": {
+    "Camera": {
+      "type": "object",
+      "properties": {
+        "basic_parameters": {
+          "type": "object",
+          "properties": {
+            "exposure": {
+              "type": "integer",
+              "minimum": 32,
+              "maximum": 20000,
+              "description": "ASI_EXPOSURE: 露出時間 (μs)"
+            },
+            "gain": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 400,
+              "description": "ASI_GAIN: ゲイン"
+            },
+            "offset": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100,
+              "description": "ASI_OFFSET or ASI_BRIGHTNESS: オフセット"
+            },
+            "gamma": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "description": "ASI_GAMMA: ガンマ補正値 (50=補正なし)"
+            }
+          },
+          "required": [
+            "exposure",
+            "gain",
+            "offset",
+            "gamma"
+          ],
+          "additionalProperties": false
+        },
+        "transfer_settings": {
+          "type": "object",
+          "properties": {
+            "band_width": {
+              "type": "integer",
+              "minimum": 40,
+              "maximum": 100,
+              "description": "ASI_BANDWIDTHOVERLOAD: USB3.0転送帯域幅の制限 (%)"
+            },
+            "high_speed_mode": {
+              "type": "boolean",
+              "description": "ASI_HIGH_SPEED_MODE: ハイスピードモード"
+            },
+            "hardware_bin": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4,
+              "description": "ASI_HARDWARE_BIN: ハードウェアビンニング"
+            },
+            "flip": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 3,
+              "description": "ASI_FLIP: 画像反転 (0:なし, 1:水平, 2:垂直, 3:両方)"
+            }
+          },
+          "required": [
+            "band_width",
+            "high_speed_mode",
+            "hardware_bin",
+            "flip"
+          ],
+          "additionalProperties": false
+        },
+        "auto_control": {
+          "type": "object",
+          "properties": {
+            "auto_max_gain": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 400,
+              "description": "ASI_AUTO_MAX_GAIN: 自動ゲイン上限"
+            },
+            "auto_max_exp": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000,
+              "description": "ASI_AUTO_MAX_EXP: 自動露出上限 (ms)"
+            },
+            "auto_target_brightness": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 255,
+              "description": "ASI_AUTO_TARGET_BRIGHTNESS: 自動露出の目標明るさ"
+            }
+          },
+          "required": [
+            "auto_max_gain",
+            "auto_max_exp",
+            "auto_target_brightness"
+          ],
+          "additionalProperties": false
+        },
+        "image_format": {
+          "type": "object",
+          "properties": {
+            "img_type": {
+              "type": "string",
+              "enum": [
+                "RAW8",
+                "RAW16",
+                "Y8"
+              ],
+              "description": "img_type: 画像フォーマット"
+            }
+          },
+          "required": [
+            "img_type"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "basic_parameters",
+        "transfer_settings",
+        "auto_control",
+        "image_format"
+      ],
+      "additionalProperties": false,
+      "description": "ASIカメラへ apply_camera_config で渡すパラメータ"
+    },
+    "Run": {
+      "type": "object",
+      "properties": {
+        "camera_source": {
+          "type": "object",
+          "properties": {
+            "dummy_camera": {
+              "type": "boolean",
+              "description": "True=ダミーカメラ(動画ファイル再生), False=実機ASIカメラ"
+            }
+          },
+          "required": [
+            "dummy_camera"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "camera_source"
+      ],
+      "additionalProperties": false,
+      "description": "実行オプション"
+    },
+    "sun_find_west_v2": {
+      "type": "object",
+      "properties": {
+        "Analyzer": {
+          "type": "object",
+          "properties": {
+            "acceptable": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 180,
+              "description": "許容角度(degree)"
+            },
+            "buf_lookback": {
+              "type": "integer",
+              "minimum": 2,
+              "description": "軌道推定に使うフレーム数"
+            }
+          },
+          "required": [
+            "acceptable",
+            "buf_lookback"
+          ],
+          "additionalProperties": false
+        },
+        "MIN2ver2": {
+          "type": "object",
+          "properties": {
+            "n": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "description": "画像格子の分割数"
+            },
+            "light_threshod": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "太陽の明るさの基準しきい値"
+            },
+            "limb_wigth": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "太陽の縁の幅の基準値(pix)"
+            },
+            "iter_cycles": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "黒点排除のイテレーション回数。0なら排除なし"
+            }
+          },
+          "required": [
+            "n",
+            "light_threshod",
+            "limb_wigth",
+            "iter_cycles"
+          ],
+          "additionalProperties": false,
+          "description": "MIN2ver2 (v2.3.8) のパラメータ"
+        },
+        "Visualizer": {
+          "type": "object",
+          "properties": {
+            "grid_color": {
+              "type": "string",
+              "pattern": "^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$",
+              "description": "画像グリッドの色(hex)"
+            },
+            "grid_ny": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "画像グリッドの縦分割数"
+            },
+            "grid_nx": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "画像グリッドの横分割数"
+            },
+            "grid_r": {
+              "type": "number",
+              "minimum": 0,
+              "description": "中心円の半径(pixel)"
+            },
+            "grid_alpha": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "画像グリッドの透明度(alpha)"
+            },
+            "opencircle_triangle": {
+              "type": "boolean",
+              "description": "西との角度差を表示する円弧に矢印をつける"
+            }
+          },
+          "required": [
+            "grid_color",
+            "grid_ny",
+            "grid_nx",
+            "grid_r",
+            "grid_alpha",
+            "opencircle_triangle"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "Analyzer",
+        "MIN2ver2",
+        "Visualizer"
+      ],
+      "additionalProperties": false,
+      "description": "main() 内で Analyzer / Visualizer などに渡すパラメータ"
+    }
+  },
+  "required": [
+    "Camera",
+    "Run",
+    "sun_find_west_v2"
+  ],
+  "additionalProperties": false
+}

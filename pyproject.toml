@@ -1,8 +1,11 @@
-
 [project]
 name = "sun_find_west"
 version = "1.0.0"
 requires-python = ">=3.13"
+dependencies = [
+    "PyYAML>=6.0",
+    "jsonschema>=4.18",
+]
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -10,6 +13,7 @@ build-backend = "setuptools.build_meta"
 
 [project.optional-dependencies]
 dev = [
+    "pytest>=8",
     "ruff>=0.13",
     "basedpyright>=1.31",
 ]
@@ -71,4 +75,7 @@ typeCheckingMode = "standard"
 pythonVersion = "3.13"
 reportMissingImports = "error"
 reportMissingTypeStubs = false
->>>>>>> Stashed changes
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
