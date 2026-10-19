@@ -111,6 +111,7 @@ try:
         handle_config,
     )
     from config.config_manager import parameter
+    from config.run_options import get_run_options
     from core.drawer import Visualizer
     from core.MIN2ver2 import MIN2_ignore_sunspots as MIN2
     from core.RANSAC import calculate_west_angle_robust as west_angle
@@ -143,10 +144,17 @@ try:
     os.environ["ZWO_ASI_LIB"] = str(env_filename)
     logger.debug(f"Successfully set ZWO_ASI_LIB environment variable:{env_filename}")
 
-    camera = connect_camera(env_filename)
+    # ダミーカメラの使用有無は run.py が決める (main.py 単体起動は不可)
+    run_options = get_run_options()
+    logger.info(f"dummy_camera={run_options.dummy_camera}")
+    camera = connect_camera(env_filename, use_dummy=run_options.dummy_camera)
 except KeyboardInterrupt:
     logger.info("Connection wait interrupted by user.")
     cancel_process()
+except (RuntimeError, ValueError) as e:
+    # 実行オプション未設定 / zwoasi未導入 / ダミー動画の未選択など
+    logger.critical(f"Failed to set up the camera: {e}")
+    cancel_process(camera=camera)
 except asi.ZWO_CaptureError as e:
     logger.critical(f"Failed to connect to the camera: {e}")
     cancel_process(camera=camera)

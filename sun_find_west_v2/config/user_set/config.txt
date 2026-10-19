@@ -21,6 +21,11 @@ auto_target_brightness : 100    /ASI_AUTO_TARGET_BRIGHTNESS: 自動露出の目�
 ---image_format---
 img_type   : RAW8   /img_type: 画像フォーマット (ASI432MMはモノクロ専用。高速解析はRAW8、高階調は12bit RAW16)
 
+===Run===
+
+---camera_source---
+dummy_camera : False  /ダミーカメラ(動画ファイル再生)を使う。True=ダミー, False=実機ASIカメラ(zwoasi必須)
+
 ===sun_find_west_v2===
 
 ---Analyzer---

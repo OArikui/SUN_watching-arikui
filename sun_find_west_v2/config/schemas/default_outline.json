@@ -21,6 +21,11 @@
             "img_type"
         ]
     },
+    "Run": {
+        "camera_source": [
+            "dummy_camera"
+        ]
+    },
     "sun_find_west_v2": {
         "Analyzer": [
             "acceptable",

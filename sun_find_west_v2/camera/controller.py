@@ -1,5 +1,4 @@
 import logging
-import sys
 import traceback
 
 logger = logging.getLogger(__name__)
@@ -10,7 +9,6 @@ else:
     logger.info("--- starting as module process ---")
 
 try:
-    import os
     import time
     from pathlib import Path
 
@@ -24,47 +22,36 @@ else:
 type VideoDummyCameraType = VideoDummyCamera
 
 try:
-    from camera.vid_dummy import VideoDummyCamera, asi
+    from camera.vid_dummy import ZWOASI_AVAILABLE, VideoDummyCamera, asi
 except ImportError:
     logger.critical("no module to be asi")
     raise
 
-try:
-    ONLY_DUMMY = asi.dum # pyright: ignore[reportAttributeAccessIssue]
-except AttributeError:
-    ONLY_DUMMY = False
 
-
-def check_stdin_input() -> str:
-    """標準入力から1行（Enterまで）を非ブロックで取得するヘルパー関数"""
-    if os.name == "nt":  # Windows環境
-        import msvcrt
-
-        if msvcrt.kbhit():
-            try:
-                line = sys.stdin.readline()
-                return line.strip()
-            except Exception:
-                return ""
-    else:  # Linux / macOS環境
-        import select
-
-        if select.select([sys.stdin], [], [], 0.0)[0]:
-            line = sys.stdin.readline()
-            return line.strip()
-    return ""
-
-
-def connect_camera(dll_path: Path) -> asi.Camera | VideoDummyCamera | None:
+def connect_camera(
+    dll_path: Path, use_dummy: bool
+) -> asi.Camera | VideoDummyCamera | None:
     """
     ASIカメラの初期化と接続待機を行うモジュール
+
+    Args:
+        dll_path: ASICamera2.dll のパス
+        use_dummy: True ならダミーカメラを返す(実機接続処理は行わない)。
+            False なら実機ASIカメラに接続する。zwoasi が無い場合は RuntimeError。
+            この値は run.py が決める。ここで自動判定やキー入力による切替はしない。
     """
 
-    if ONLY_DUMMY and VideoDummyCamera is not None:
+    if use_dummy:
         logger.info("ダミーモードとして接続処理をskipします")
-        time.sleep(1)
-        dummy_cam = VideoDummyCamera()
-        return dummy_cam
+        return VideoDummyCamera()
+
+    if not ZWOASI_AVAILABLE:
+        msg = (
+            "zwoasi がインストールされていません。実機カメラを使うには zwoasi を導入するか、"
+            "userSet の Run>dummy_camera を True にしてください。"
+        )
+        logger.critical(msg)
+        raise RuntimeError(msg)
 
     # 1. DLLパスの存在確認
     if not dll_path.exists():
@@ -95,23 +82,6 @@ def connect_camera(dll_path: Path) -> asi.Camera | VideoDummyCamera | None:
 
     try:
         while True:
-            # 標準入力の入力を非ブロックで確認
-            user_input = check_stdin_input()
-            if user_input == "DUMVID":
-                if VideoDummyCamera is not None:
-                    logger.info("DUMVID received. Returning VideoDummyCamera instance.")
-                    try:
-                        # vid_dummy (VideoDummyCamera) のインスタンスを作成して返す
-                        dummy_cam = VideoDummyCamera()
-                        return dummy_cam
-                    except Exception as e:
-                        logger.error(f"Failed to initialize VideoDummyCamera: {e}")
-                else:
-                    print(
-                        "\n[INFO] ダミーコード(DUMVID)が入力されましたが、vid_dummy モジュールをインポートできませんでした。"
-                    )
-                    logger.warning("DUMVID received, but vid_dummy is not available.")
-
             try:
                 cameras = asi.list_cameras()
             except (asi.ZWO_Error, OSError):

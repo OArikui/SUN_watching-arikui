@@ -8,10 +8,14 @@ import numpy as np
 
 try:
     import zwoasi as asi
+
+    ZWOASI_AVAILABLE = True
 except ImportError:
-    # zwoasiがインストールされていない環境でも動くようダミーを定義
+    # zwoasiがインストールされていない環境でもダミーカメラが動くよう、定数だけのスタブを定義
+    # (ダミーを使うかどうかの判定には使わない。判定は run.py が行う)
+    ZWOASI_AVAILABLE = False
+
     class DummyASI:
-        dum = True
         ZWO_CaptureError = Exception
         ZWO_Error = Exception
         ASI_GAIN = 1

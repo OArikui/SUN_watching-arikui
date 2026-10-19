@@ -116,6 +116,22 @@
         }
       }
     },
+    "Run": {
+      "type": "object",
+      "description": "run.py が起動時に参照する実行オプション",
+      "properties": {
+        "camera_source": {
+          "type": "object",
+          "properties": {
+            "dummy_camera": {
+              "type": "boolean",
+              "default": false,
+              "description": "ダミーカメラ(動画ファイル再生)を使う。True=ダミー, False=実機ASIカメラ(zwoasi必須)"
+            }
+          }
+        }
+      }
+    },
     "sun_find_west_v2": {
       "type": "object",
       "description": "Visualizer クラスのコンストラクタに渡すパラメータ",
