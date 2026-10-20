@@ -422,13 +422,6 @@ class Visualizer:
             )
 
         points = np.asarray(recent_pts)
-        if points.ndim == 2 and points.shape[1] >= 2 and len(points) > 1:
-            painter.setPen(QPen(QColor("#55d7df"), 2.0))
-            for first, second in zip(points[:-1], points[1:], strict=True):
-                painter.drawLine(
-                    QPointF(float(first[0]), float(first[1])),
-                    QPointF(float(second[0]), float(second[1])),
-                )
 
         painter.setPen(QPen(QColor("#91d8ff"), 2.5))
         painter.setBrush(QColor(80, 180, 255, 45))
@@ -453,6 +446,15 @@ class Visualizer:
                             float(cy) + self.sunline * vector_y,
                         ),
                     )
+
+        # Draw the trajectory last so it stays visually above the direction vector.
+        if points.ndim == 2 and points.shape[1] >= 2 and len(points) > 1:
+            painter.setPen(QPen(QColor("#55d7df"), 2.0))
+            for first, second in zip(points[:-1], points[1:], strict=True):
+                painter.drawLine(
+                    QPointF(float(first[0]), float(first[1])),
+                    QPointF(float(second[0]), float(second[1])),
+                )
 
         painter.end()
         self._latest_image = image
