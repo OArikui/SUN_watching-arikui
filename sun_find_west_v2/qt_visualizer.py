@@ -41,7 +41,7 @@ class _ImageLabel(QLabel):
         self,
         on_resize: Callable[[], None],
         on_wheel: Callable[[int, QPointF], None],
-        on_mouse_press: Callable[[QPointF], None],
+        on_mouse_press: Callable[[QPointF, bool], None],
         on_mouse_move: Callable[[QPointF, bool], None],
         on_mouse_release: Callable[[], None],
         on_double_click: Callable[[QPointF], None],
@@ -84,7 +84,10 @@ class _ImageLabel(QLabel):
     def mousePressEvent(self, a0: QMouseEvent | None) -> None:
         """Delegate a click to the pan or overview-map controller."""
         if a0 is not None:
-            self._on_mouse_press(a0.position())
+            self._on_mouse_press(
+                a0.position(),
+                a0.button() == Qt.MouseButton.LeftButton,
+            )
             a0.accept()
 
     def mouseMoveEvent(self, a0: QMouseEvent | None) -> None:
@@ -97,7 +100,8 @@ class _ImageLabel(QLabel):
     def mouseReleaseEvent(self, a0: QMouseEvent | None) -> None:
         """Stop panning when the mouse button is released."""
         if a0 is not None:
-            self._on_mouse_release()
+            if a0.button() == Qt.MouseButton.LeftButton:
+                self._on_mouse_release()
             a0.accept()
 
     def mouseDoubleClickEvent(self, a0: QMouseEvent | None) -> None:
@@ -503,8 +507,10 @@ class Visualizer:
         self._clamp_view_center()
         self._render_image()
 
-    def _handle_mouse_press(self, position: QPointF) -> None:
+    def _handle_mouse_press(self, position: QPointF, is_left_button: bool) -> None:
         """Center the viewport from the overview map or begin dragging."""
+        if not is_left_button:
+            return
         map_rect = self.image_label._minimap_widget_rect
         image_rect = self.image_label._minimap_image_rect
         if map_rect is not None and map_rect.contains(position):
@@ -517,6 +523,8 @@ class Visualizer:
                 )
                 self._clamp_view_center()
                 self._render_image()
+            return
+        if self._zoom_factor <= 1.0:
             return
         self._is_panning = True
         self._last_pan_position = position
@@ -856,23 +864,24 @@ class Visualizer:
 
     def _render_image(self) -> None:
         """Render the current crop and update the overview viewport rectangle."""
-        if self._latest_image is None:
+        latest_image = self._latest_image
+        if latest_image is None:
             return
         left, top, view_width, view_height = self._current_view_rect()
         if self._zoom_factor <= 1.0:
-            crop = self._latest_image
+            crop = latest_image
             visible_rect = (
                 0.0,
                 0.0,
-                float(self._latest_image.width()),
-                float(self._latest_image.height()),
+                float(latest_image.width()),
+                float(latest_image.height()),
             )
         else:
             x0 = max(0, min(self.width - 1, int(round(left))))
             y0 = max(0, min(self.height - 1, int(round(top))))
             crop_width = max(1, min(self.width - x0, int(round(view_width))))
             crop_height = max(1, min(self.height - y0, int(round(view_height))))
-            crop = self._latest_image.copy(x0, y0, crop_width, crop_height)
+            crop = latest_image.copy(x0, y0, crop_width, crop_height)
             visible_rect = (
                 float(x0),
                 float(y0),
@@ -885,7 +894,7 @@ class Visualizer:
             Qt.TransformationMode.SmoothTransformation,
         )
         self.image_label.setPixmap(QPixmap.fromImage(scaled))
-        self.image_label.set_minimap_data(self._latest_image, visible_rect)
+        self.image_label.set_minimap_data(latest_image, visible_rect)
         self.zoom_label.setText(f"ZOOM {self._zoom_factor:.1f}×")
         if self._zoom_factor > 1.0 and not self._is_panning:
             self.image_label.setCursor(Qt.CursorShape.OpenHandCursor)
