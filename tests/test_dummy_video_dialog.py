@@ -54,6 +54,6 @@ def test_select_video_file_uses_qt_dialog_and_retains_application(
     assert selected == r"C:\videos\sun.ser"
     assert selected_again == r"C:\videos\sun.ser"
     assert len(created_apps) == 1
-    assert getattr(created_apps[0], "quit_on_last_window_closed") is False
+    assert created_apps[0].quit_on_last_window_closed is False
     assert len(dialog_calls) == 2
     assert "動画ファイル" in str(dialog_calls[0][3])
