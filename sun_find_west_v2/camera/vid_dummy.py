@@ -1,9 +1,10 @@
 """実機カメラがない環境で動画を入力として使うダミーカメラを提供する。"""
 
 import struct
-import sys
 import time
+import tkinter as tk
 from pathlib import Path
+from tkinter import filedialog
 from typing import BinaryIO
 
 import cv2
@@ -18,17 +19,11 @@ except ImportError:
     # (ダミーを使うかどうかの判定には使わない。判定は run.py が行う)
     ZWOASI_AVAILABLE = False
 
-    class _DummyZWOError(Exception):
-        """zwoasi が未導入の場合に使う SDK エラー型。"""
-
-    class _DummyZWOCaptureError(Exception):
-        """zwoasi が未導入の場合に使う撮影エラー型。"""
-
     class DummyASI:
         """zwoasi がない環境で使う、定数のみのスタブ。"""
 
-        ZWO_CaptureError = _DummyZWOCaptureError
-        ZWO_Error = _DummyZWOError
+        ZWO_CaptureError = Exception
+        ZWO_Error = Exception
         ASI_GAIN = 1
         ASI_EXPOSURE = 2
         ASI_TEMPERATURE = 3
@@ -156,30 +151,6 @@ class SERVideoCapture:
         self.is_opened = False
 
 
-_qt_application: object | None = None
-
-
-def _select_video_file() -> str:
-    """Qt のファイルダイアログで入力動画を選択する。"""
-    global _qt_application
-    from PyQt6.QtWidgets import QApplication, QFileDialog
-
-    app = QApplication.instance()
-    if app is None:
-        created_app = QApplication(sys.argv[:1])
-        _qt_application = created_app
-        app = created_app
-
-    app.setQuitOnLastWindowClosed(False)
-    selected_path, _ = QFileDialog.getOpenFileName(
-        None,
-        "再生する動画ファイルを選択してください",
-        "",
-        "動画ファイル (*.mp4 *.avi *.mov *.mkv *.wmv *.ser);;すべてのファイル (*)",
-    )
-    return selected_path
-
-
 class VideoDummyCamera:
     """動画ファイルからフレームを提供し、zwoasi.Camera の動作を模倣する。
 
@@ -195,7 +166,21 @@ class VideoDummyCamera:
             動画ファイルのパス。未指定の場合はファイル選択ダイアログを表示する。
         """
         if not video_path:
-            video_path = _select_video_file()
+            # tkinterのルートウィンドウを表示しないように隠す
+            root = tk.Tk()
+            root.withdraw()
+            root.attributes("-topmost", True)  # ダイアログを最前面に表示
+
+            try:
+                video_path = filedialog.askopenfilename(
+                    title="再生する動画ファイルを選択してください",
+                    filetypes=[
+                        ("動画ファイル", "*.mp4 *.avi *.mov *.mkv *.wmv *.ser"),
+                        ("すべてのファイル", "*.*"),
+                    ],
+                )
+            finally:
+                root.destroy()
 
             if not video_path:
                 raise ValueError("動画ファイルが選択されませんでした。")
