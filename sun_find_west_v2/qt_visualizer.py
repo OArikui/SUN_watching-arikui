@@ -31,7 +31,7 @@ class _ImageLabel(QLabel):
         super().__init__()
         self._on_resize = on_resize
 
-    def resizeEvent(self, a0: QResizeEvent) -> None:
+    def resizeEvent(self, a0: QResizeEvent | None) -> None:
         """Keep the frame fitted to the current label dimensions."""
         super().resizeEvent(a0)
         self._on_resize()
@@ -45,7 +45,7 @@ class _MainWindow(QMainWindow):
         super().__init__()
         self._on_close = on_close
 
-    def closeEvent(self, a0: QCloseEvent) -> None:
+    def closeEvent(self, a0: QCloseEvent | None) -> None:
         """Record window closure before delegating to Qt."""
         self._on_close()
         super().closeEvent(a0)
