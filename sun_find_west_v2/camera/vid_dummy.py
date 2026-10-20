@@ -164,11 +164,16 @@ def _select_video_file() -> str:
     global _qt_application
     from PyQt6.QtWidgets import QApplication, QFileDialog
 
-    app = QApplication.instance()
-    if app is None:
-        created_app = QApplication(sys.argv[:1])
-        _qt_application = created_app
-        app = created_app
+    app_instance = QApplication.instance()
+    if app_instance is None:
+        app = QApplication(sys.argv[:1])
+        _qt_application = app
+    elif isinstance(app_instance, QApplication):
+        app = app_instance
+    else:
+        raise RuntimeError(
+            "Video selection requires a QApplication, not a QCoreApplication."
+        )
 
     app.setQuitOnLastWindowClosed(False)
     selected_path, _ = QFileDialog.getOpenFileName(
