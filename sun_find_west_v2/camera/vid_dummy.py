@@ -156,7 +156,7 @@ class SERVideoCapture:
         self.is_opened = False
 
 
-_qt_application = None
+_qt_application: object | None = None
 
 
 def _select_video_file() -> str:
@@ -166,8 +166,9 @@ def _select_video_file() -> str:
 
     app = QApplication.instance()
     if app is None:
-        _qt_application = QApplication(sys.argv[:1])
-        app = _qt_application
+        created_app = QApplication(sys.argv[:1])
+        _qt_application = created_app
+        app = created_app
 
     app.setQuitOnLastWindowClosed(False)
     selected_path, _ = QFileDialog.getOpenFileName(
