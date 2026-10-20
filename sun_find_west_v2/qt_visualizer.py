@@ -31,9 +31,9 @@ class _ImageLabel(QLabel):
         super().__init__()
         self._on_resize = on_resize
 
-    def resizeEvent(self, event: QResizeEvent) -> None:
+    def resizeEvent(self, a0: QResizeEvent) -> None:
         """Keep the frame fitted to the current label dimensions."""
-        super().resizeEvent(event)
+        super().resizeEvent(a0)
         self._on_resize()
 
 
@@ -45,10 +45,10 @@ class _MainWindow(QMainWindow):
         super().__init__()
         self._on_close = on_close
 
-    def closeEvent(self, event: QCloseEvent) -> None:
+    def closeEvent(self, a0: QCloseEvent) -> None:
         """Record window closure before delegating to Qt."""
         self._on_close()
-        super().closeEvent(event)
+        super().closeEvent(a0)
 
 
 class Visualizer:
@@ -88,9 +88,16 @@ class Visualizer:
         self.sliders: dict[str, QSlider] = {}
         self._metric_labels: dict[str, QLabel] = {}
 
-        self.app = QApplication.instance()
-        if self.app is None:
-            self.app = QApplication(sys.argv[:1])
+        app_instance = QApplication.instance()
+        if app_instance is None:
+            app = QApplication(sys.argv[:1])
+        elif isinstance(app_instance, QApplication):
+            app = app_instance
+        else:
+            raise RuntimeError(
+                "SUN_watching requires a QApplication instance, not a QCoreApplication."
+            )
+        self.app: QApplication = app
         self.app.setApplicationName("SUN_watching")
 
         self.window = _MainWindow(self._mark_closed)
@@ -287,7 +294,7 @@ class Visualizer:
 
         height, width = pixels.shape[:2]
         return QImage(
-            pixels.data,
+            pixels.tobytes(),
             width,
             height,
             int(pixels.strides[0]),
