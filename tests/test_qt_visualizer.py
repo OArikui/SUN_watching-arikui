@@ -30,7 +30,6 @@ def test_array_to_qimage_accepts_rgb_frames() -> None:
     assert image.format() == QImage.Format.Format_RGB888
 
 
-
 def test_trajectory_colormap_covers_early_to_late_colors() -> None:
     """Map the start and end of a trajectory to distinct endpoint colors."""
     assert Visualizer._trajectory_color(0.0).name() == "#440154"
