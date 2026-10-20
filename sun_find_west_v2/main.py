@@ -222,7 +222,7 @@ try:
         connect_camera,
         handle_config,
     )
-    from core.drawer import Visualizer
+    from qt_visualizer import Visualizer
     from core.MIN2ver2 import MIN2_ignore_sunspots as MIN2
     from core.RANSAC import calculate_west_angle_robust as west_angle
 except ImportError:
