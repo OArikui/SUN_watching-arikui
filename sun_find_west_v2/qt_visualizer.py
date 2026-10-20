@@ -400,7 +400,7 @@ class Visualizer:
         total_frames: int | str | None = None,
     ) -> None:
         """Refresh the camera image, trajectory overlay and metric labels."""
-        image = self._array_to_qimage(img)
+        image = self._array_to_qimage(img).convertToFormat(QImage.Format.Format_RGB888)
         painter = QPainter(image)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
