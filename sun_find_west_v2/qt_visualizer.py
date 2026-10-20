@@ -582,7 +582,7 @@ class Visualizer:
             round(first + (last - first) * fraction)
             for first, last in zip(start, end, strict=True)
         )
-        return QColor(*channels)
+        return QColor(channels[0], channels[1], channels[2])
 
     @staticmethod
     def _normalise_trajectory_time(
