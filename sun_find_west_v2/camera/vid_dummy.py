@@ -1,13 +1,17 @@
+"""実機カメラがない環境で動画を入力として使うダミーカメラを提供する。"""
+
 import struct
 import time
 import tkinter as tk
+from pathlib import Path
 from tkinter import filedialog
+from typing import BinaryIO
 
 import cv2
 import numpy as np
 
 try:
-    import zwoasi as asi
+    import zwoasi as asi  # pyright: ignore[reportMissingImports]
 
     ZWOASI_AVAILABLE = True
 except ImportError:
@@ -16,6 +20,8 @@ except ImportError:
     ZWOASI_AVAILABLE = False
 
     class DummyASI:
+        """zwoasi がない環境で使う、定数のみのスタブ。"""
+
         ZWO_CaptureError = Exception
         ZWO_Error = Exception
         ASI_GAIN = 1
@@ -38,110 +44,126 @@ except ImportError:
         ASI_IMG_Y8 = 3
 
         class Camera:
-            pass
+            """実機カメラクラスの型名を提供するスタブ。"""
 
     asi = DummyASI()
 
 
 class SERVideoCapture:
+    """SER動画ファイルを OpenCV の VideoCapture と同様の方法で読み込む。
+
+    天体用 SER フォーマット（8bit / 16bit）に対応する独自リーダー。
     """
-    天体用 .ser フォーマット（8bit / 16bit）を cv2.VideoCapture と
-    同じインターフェースで読み込むための独自リーダークラス。
-    """
-    def __init__(self, filepath: str):
-        self.filepath = filepath
-        self.file = None
+
+    def __init__(self, filepath: str | Path) -> None:
+        self.filepath = str(filepath)
+        self.file: BinaryIO | None = None
         self.is_opened = False
-        
+        self.width = 0
+        self.height = 0
+        self.pixel_depth = 0
+        self.frame_count = 0
+        self.bpp = 1
+        self.frame_size = 0
+        self.current_frame = 0
+        self.is_little_endian = True
+
         try:
-            self.file = open(filepath, 'rb')
+            # ファイルハンドルはフレームごとのランダムアクセスに必要なため保持する。
+            self.file = Path(filepath).open("rb")  # noqa: SIM115
             header = self.file.read(178)
             # SERファイルは178バイトのヘッダを持ち、LUCAM-RECORDERから始まる
-            if len(header) < 178 or not header.startswith(b'LUCAM-RECORDER'):
+            if len(header) < 178 or not header.startswith(b"LUCAM-RECORDER"):
+                self.release()
                 return
-                
+
             # エンディアンの取得 (0 = Big Endian, 1 = Little Endian)
-            endian_flag = struct.unpack('<i', header[22:26])[0]
-            self.is_little_endian = (endian_flag == 1)
-            
+            endian_flag = struct.unpack("<i", header[22:26])[0]
+            self.is_little_endian = endian_flag == 1
+
             # 幅、高さ、ピクセル深度、フレーム数の取得
-            self.width = struct.unpack('<i', header[26:30])[0]
-            self.height = struct.unpack('<i', header[30:34])[0]
-            self.pixel_depth = struct.unpack('<i', header[34:38])[0]
-            self.frame_count = struct.unpack('<i', header[38:42])[0]
-            
+            self.width = struct.unpack("<i", header[26:30])[0]
+            self.height = struct.unpack("<i", header[30:34])[0]
+            self.pixel_depth = struct.unpack("<i", header[34:38])[0]
+            self.frame_count = struct.unpack("<i", header[38:42])[0]
+
             # 8bit超の場合は1ピクセル2バイト(16bit)として扱う
             self.bpp = 2 if self.pixel_depth > 8 else 1
             self.frame_size = self.width * self.height * self.bpp
-            
             self.current_frame = 0
             self.is_opened = True
-            
-        except Exception:
-            if self.file:
-                self.file.close()
-            self.is_opened = False
 
-    def isOpened(self):
+        except (OSError, struct.error):
+            self.release()
+
+    def isOpened(self) -> bool:
+        """ファイルが正常に開かれている場合に True を返す。"""
         return self.is_opened
 
-    def get(self, propId):
+    def get(self, propId: int) -> float:
+        """指定された OpenCV 動画プロパティの値を返す。"""
         if propId == cv2.CAP_PROP_FRAME_WIDTH:
             return float(self.width)
-        elif propId == cv2.CAP_PROP_FRAME_HEIGHT:
+        if propId == cv2.CAP_PROP_FRAME_HEIGHT:
             return float(self.height)
-        elif propId == cv2.CAP_PROP_FPS:
-            return 30.0  # SER形式は標準的なFPSを持たないため、仮の値として30.0を返す
-        elif propId == cv2.CAP_PROP_FRAME_COUNT:
+        if propId == cv2.CAP_PROP_FPS:
+            # SER形式は標準的なFPSを持たないため、仮の値として30.0を返す
+            return 30.0
+        if propId == cv2.CAP_PROP_FRAME_COUNT:
             return float(self.frame_count)
         return 0.0
 
-    def set(self, propId, value):
+    def set(self, propId: int, value: float | int) -> bool:
+        """指定された OpenCV 動画プロパティを設定する。"""
         if propId == cv2.CAP_PROP_POS_FRAMES:
             self.current_frame = int(value)
             return True
         return False
 
-    def read(self):
-        if not self.is_opened or self.current_frame >= self.frame_count:
+    def read(self) -> tuple[bool, np.ndarray | None]:
+        """次のフレームを読み込み、成功フラグと画像を返す。"""
+        if not self.is_opened or self.file is None or self.current_frame >= self.frame_count:
             return False, None
-            
+
         self.file.seek(178 + self.current_frame * self.frame_size)
         data = self.file.read(self.frame_size)
-        
         if len(data) != self.frame_size:
             return False, None
-            
+
         if self.bpp == 1:
             frame = np.frombuffer(data, dtype=np.uint8).reshape((self.height, self.width))
         else:
             # 16bitデータの読み込み
-            dtype = '<u2' if self.is_little_endian else '>u2'
+            dtype = "<u2" if self.is_little_endian else ">u2"
             frame = np.frombuffer(data, dtype=dtype).reshape((self.height, self.width))
             if not self.is_little_endian:
                 # OpenCV等の処理と互換性を持たせるためネイティブなuint16に変換
                 frame = frame.astype(np.uint16)
-                 
+
         self.current_frame += 1
         return True, frame
 
-    def release(self):
-        if self.file:
+    def release(self) -> None:
+        """開いているファイルを閉じ、オープン状態を解除する。"""
+        if self.file is not None:
             self.file.close()
-            self.is_opened = False
+            self.file = None
+        self.is_opened = False
 
 
 class VideoDummyCamera:
-    """
-    zwoasi.Cameraクラスの動作を模倣し、指定された動画ファイル（8bit / 16bit）から
-    フレームを提供するダミークラス。
+    """動画ファイルからフレームを提供し、zwoasi.Camera の動作を模倣する。
+
+    指定された動画ファイル（8bit / 16bit）を入力ソースとして使用する。
     """
 
     def __init__(self, video_path: str | None = None) -> None:
-        """
-        Args:
-            video_path (str, optional): 動画ファイルのパス。
-            指定がない場合はファイルダイアログを表示して選択させます。
+        """動画ファイルを開き、カメラ互換の内部状態を初期化する。
+
+        Parameters
+        ----------
+        video_path : str | None
+            動画ファイルのパス。未指定の場合はファイル選択ダイアログを表示する。
         """
         if not video_path:
             # tkinterのルートウィンドウを表示しないように隠す
@@ -149,22 +171,24 @@ class VideoDummyCamera:
             root.withdraw()
             root.attributes("-topmost", True)  # ダイアログを最前面に表示
 
-            video_path = filedialog.askopenfilename(
-                title="再生する動画ファイルを選択してください",
-                filetypes=[
-                    ("動画ファイル", "*.mp4 *.avi *.mov *.mkv *.wmv *.ser"),
-                    ("すべてのファイル", "*.*"),
-                ],
-            )
-            root.destroy()
+            try:
+                video_path = filedialog.askopenfilename(
+                    title="再生する動画ファイルを選択してください",
+                    filetypes=[
+                        ("動画ファイル", "*.mp4 *.avi *.mov *.mkv *.wmv *.ser"),
+                        ("すべてのファイル", "*.*"),
+                    ],
+                )
+            finally:
+                root.destroy()
 
             if not video_path:
                 raise ValueError("動画ファイルが選択されませんでした。")
 
         self.video_path = video_path
-        
+
         # 拡張子が .ser の場合は専用のリーダーを使用し、それ以外はOpenCVを使用する
-        if video_path.lower().endswith('.ser'):
+        if video_path.lower().endswith(".ser"):
             self.cap = SERVideoCapture(video_path)
         else:
             self.cap = cv2.VideoCapture(video_path)
@@ -184,17 +208,17 @@ class VideoDummyCamera:
         self.image_type = getattr(asi, "ASI_IMG_RAW8", 0)
 
         # 仮想のコントロール値 (Gain, Exposure, Temp)
-        self.controls = {
+        self.controls: dict[int, int | float] = {
             getattr(asi, "ASI_GAIN", 1): 150,
             getattr(asi, "ASI_EXPOSURE", 2): 30000,
             getattr(asi, "ASI_TEMPERATURE", 3): 250,  # 25.0℃
         }
         self.is_capturing = False
 
-    def get_camera_property(self) -> dict:
-        """
-        zwoasi.Camera.get_camera_property() の互換メソッド。
-        16bit(RAW16)のサポート情報を返します。
+    def get_camera_property(self) -> dict[str, object]:
+        """zwoasi.Camera.get_camera_property() と互換性のある情報を返す。
+
+        16bit（RAW16）のサポート情報を含む。
         """
         return {
             "Name": "Dummy Video Camera",
@@ -218,10 +242,10 @@ class VideoDummyCamera:
             "BitDepth": 16,
         }
 
-    def get_controls(self):
-        """
-        zwoasi.Camera.get_controls() の互換メソッド。
-        カメラがサポートするコントロール情報 (コントロールID -> 制御パラメータ情報の辞書) を返します。
+    def get_controls(self) -> dict[int, dict[str, str | int]]:
+        """zwoasi.Camera.get_controls() と互換性のある制御情報を返す。
+
+        カメラがサポートするコントロール ID と制御パラメータの辞書を返す。
         """
         # ASIカメラで利用される主要なコントロールIDを取得
         exposure_id = getattr(asi, "ASI_EXPOSURE", 2)
@@ -272,12 +296,30 @@ class VideoDummyCamera:
         }
 
     def set_roi_format(
-        self, width=None, height=None, bins=1, image_type=0, start_x=0, start_y=0
-    ):
-        """
-        zwoasi.Camera.set_roi_format() の互換メソッド。
+        self,
+        width: int | None = None,
+        height: int | None = None,
+        bins: int = 1,
+        image_type: int = 0,
+        start_x: int = 0,
+        start_y: int = 0,
+    ) -> None:
+        """ROI サイズ、ビニング、画像タイプなどをダミー値として保存する。
 
-        ROI（関心領域）サイズやビニング、画像タイプをダミー値として保存します。
+        Parameters
+        ----------
+        width : int | None
+            設定する幅。None の場合は現在値を維持する。
+        height : int | None
+            設定する高さ。None の場合は現在値を維持する。
+        bins : int
+            ビニング値。
+        image_type : int
+            画像フォーマット ID。
+        start_x : int
+            ROI の開始 X 座標。
+        start_y : int
+            ROI の開始 Y 座標。
         """
         if width is not None:
             self.width = int(width)
@@ -289,36 +331,62 @@ class VideoDummyCamera:
         self.start_x = start_x
         self.start_y = start_y
 
-    def start_video_capture(self):
-        """動画キャプチャの開始を模倣"""
+    def start_video_capture(self) -> None:
+        """動画キャプチャの開始を模倣する。"""
         self.is_capturing = True
 
-    def stop_video_capture(self):
-        """動画キャプチャの停止を模倣"""
+    def stop_video_capture(self) -> None:
+        """動画キャプチャの停止を模倣する。"""
         self.is_capturing = False
 
-    def close(self):
-        """リソースの解放"""
+    def close(self) -> None:
+        """動画キャプチャと関連リソースを解放する。"""
         self.stop_video_capture()
         if self.cap.isOpened():
             self.cap.release()
 
-    def get_roi_format(self):
-        """現在のROIフォーマット(width, height, binning, img_type)を返します。"""
+    def get_roi_format(self) -> tuple[int, int, int, int]:
+        """現在の ROI フォーマット（width, height, binning, img_type）を返す。"""
         return (self.width, self.height, self.bins, self.image_type)
 
-    def get_control_value(self, control_type):
-        """コントロール値と自動設定フラグ(bool)のタプルを返す"""
+    def get_control_value(self, control_type: int) -> tuple[int | float, bool]:
+        """コントロール値と自動設定フラグのタプルを返す。"""
         val = self.controls.get(control_type, 0)
         return (val, False)
 
-    def set_control_value(self, control_type, value, auto=False):
-        """UIからの設定変更を受け付けるダミーメソッド"""
+    def set_control_value(
+        self, control_type: int, value: int | float, auto: bool = False
+    ) -> None:
+        """UIからの設定変更を受け付ける。
+
+        Parameters
+        ----------
+        control_type : int
+            制御 ID。
+        value : int | float
+            設定値。
+        auto : bool
+            自動設定フラグ（互換性のため受け取る）。
+        """
         self.controls[control_type] = value
 
-    def capture_video_frame(self, timeout=500):
-        """
-        動画から1フレーム読み込み、`image_type` に準拠した画像（RAW8 / RAW16）のバイト列を返します。
+    def capture_video_frame(self, timeout: int = 500) -> bytes:
+        """動画から1フレームを読み、画像タイプに準拠したバイト列を返す。
+
+        Parameters
+        ----------
+        timeout : int
+            zwoasi API との互換性のためのタイムアウト値。
+
+        Returns
+        -------
+        bytes
+            RAW8 または RAW16 形式のフレームデータ。
+
+        Raises
+        ------
+        asi.ZWO_CaptureError
+            キャプチャが開始されていない、またはフレームを読み込めない場合。
         """
         if not self.is_capturing:
             raise getattr(asi, "ZWO_CaptureError", Exception)("Capture not started")
@@ -326,11 +394,11 @@ class VideoDummyCamera:
         time.sleep(1.0 / self.fps)
 
         ret, frame = self.cap.read()
-        if not ret:
+        if not ret or frame is None:
             # 動画終端到達時は最初に戻す（ループ再生）
             self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
             ret, frame = self.cap.read()
-            if not ret:
+            if not ret or frame is None:
                 raise getattr(asi, "ZWO_CaptureError", Exception)(
                     "Failed to read dummy frame"
                 )

@@ -1,4 +1,9 @@
-import os
+"""最小二乗法による太陽像の円検出と黒点除外処理を提供するモジュール。
+
+一度検出した近似円の内側にある点のうち、近似円の外側にある点だけから近似した円から
+limbwigth * (3/2) の範囲にない点は黒点とみなします。
+"""
+
 import pathlib
 from pprint import pformat
 
@@ -8,13 +13,6 @@ import numpy as np
 from matplotlib import gridspec
 from matplotlib.patches import Circle
 
-"""
-最小二乗法による円の検出を行う関数
-main: MIN2_ignore_sunspots()
-
-一度検出した近似円の内側にある点のうち、近似円の外側にある点だけから近似した円からlimbwigth*(3/2)の
-範囲にないもんは黒点とみなします。
-"""
 version = "MIN2 v2.3.8"  #fix:popによるindexの変化を阻止
 
 def cut_and_sampling(
@@ -26,7 +24,8 @@ def cut_and_sampling(
         img_inst (Union[str, np.ndarray]): 画像の指示。"GLOBAL"ならglobal変数のimgを取得する。もしくは読み込んだ画像。
         sun_threshold (Union[int, float]): 太陽像とみなす明るさのしきい値。これ以下の直線は処理をスキップする。
 
-    Returns:
+    Returns
+    -------
         List[List[int]]: サンプリングされた縁の座標 [x, y] のリスト。
     """
     if isinstance(img_inst, str):
@@ -74,10 +73,12 @@ def fit_circle(spots: list[list[int]] | np.ndarray, show: bool = False) -> list[
         spots (Union[List[List[int]], np.ndarray]): 縁の点の座標 [x, y] を格納した二次元配列、またはNumPy配列。
         show (bool):例外発生時にshow_circleによる描画を行うか
 
-    Raises:
+    Raises
+    ------
         Exception: 与えられた座標が3点未満で円を確定できない場合に例外を発生させる。
 
-    Returns:
+    Returns
+    -------
         List[float]: 近似円の中心X座標、中心Y座標、半径を含むリスト [cx, cy, R]。
     """
     if len(spots) < 3:
@@ -119,10 +120,11 @@ def show_circle(
         iteration_count (Union[int, str]): 現在の反復回数。デフォルトは 1 です。
         is_last (bool): 最後の処理かどうかを示すフラグ。True の場合は反復回数の代わりに "Last" と表示します。デフォルトは False です。
         simple (bool): シンプルな表示(ポスター図用)を作成するフラグ。 デフォルトはFalse.
-    Returns:
+
+    Returns
+    -------
         None: 戻り値はありません（画像をウィンドウに表示します）。
     """
-
     if simple:
         show_circle_simple(
                     img_inst=img_inst,
@@ -143,7 +145,7 @@ def show_circle(
                 )
 
         elif img_inst == "PATH":
-            if img_path != None:
+            if img_path is not None:
                 img = cv2.imread(str(img_path), cv2.IMREAD_UNCHANGED)
                 if img is None:
                     raise ValueError(
@@ -191,10 +193,7 @@ def show_circle(
     iter_text = "Last" if is_last else str(iteration_count)
 
     # ウィンドウ全体の上部に大きく表示
-    if img_path:
-        img_name = os.path.basename(img_path)
-    else:
-        img_name = "Unknown"
+    img_name = pathlib.Path(img_path).name if img_path else "Unknown"
 
     fig.suptitle(
         f"{img_name}  |  Iteration: {iter_text}", fontsize=16, fontweight="bold"
@@ -214,7 +213,7 @@ def show_circle(
         va="bottom",
         fontsize=12,
     )
-    if not img is None:
+    if img is not None:
         ax_main.imshow(img, cmap="magma")
 
     if not isinstance(cir_stat, bool) and cir_stat is not None:
@@ -222,11 +221,11 @@ def show_circle(
         circle = Circle((cx, cy), R, fill=False, color="orange", linewidth=2)
         ax_main.add_patch(circle)
 
-    x, y = zip(*spots)
+    x, y = zip(*spots, strict=False)
     ax_main.scatter(x, y, color="red", label="Edges", s=50)
 
     # 座標ラベルと対応関係のための番号を表示
-    for idx, (xi, yi) in enumerate(zip(x, y)):
+    for idx, (xi, yi) in enumerate(zip(x, y, strict=False)):
         # グラフと対応させる番号を大きく表示
         ax_main.text(
             xi,
@@ -271,16 +270,16 @@ def show_circle(
     window_size = 15  # 抽出する近傍のサイズ（前後15ピクセル）
 
     line_data = np.linspace(0, 0, window_size * 2)
-    for idx, (xi, yi) in enumerate(zip(x, y)):
+    for idx, (xi, yi) in enumerate(zip(x, y, strict=False)):
         # 横線(x_line)上の点か、縦線(y_line)上の点かを判定
         is_x_line = any(yi == height * i // divnum for i in range(1, divnum))
 
         if is_x_line:
-            if not img is None:
+            if img is not None:
                 line_data = img[yi, :].astype(float)
             center_idx = xi
         else:  # y_line
-            if not img is None:
+            if img is not None:
                 line_data = img[:, xi].astype(float)
             center_idx = yi
 
@@ -346,10 +345,10 @@ def show_circle_simple(
         is_last (bool): 最後の処理かどうかを示すフラグ。True の場合は "Last" と表示します。デフォルトは False です。
         markersize (int): プロットする縁の点のマーカーサイズ。デフォルトは 400 です。
 
-    Returns:
+    Returns
+    -------
         None: 戻り値はありません（画像をウィンドウに表示します）。
     """
-
     if isinstance(img_inst, str):
         if img_inst == "GLOBAL":
             img = globals().get("img")
@@ -359,7 +358,7 @@ def show_circle_simple(
                 )
 
         elif img_inst == "PATH":
-            if img_path != None:
+            if img_path is not None:
                 img = cv2.imread(str(img_path), cv2.IMREAD_UNCHANGED)
                 if img is None:
                     raise ValueError(
@@ -382,7 +381,7 @@ def show_circle_simple(
     spot_C = "red"
 
     fig, ax = plt.subplots()  # figとaxの作成
-    if not img is None:
+    if img is not None:
         ax.imshow(img, cmap=img_cmap)  # 画像をグレースケールで表示
     if not isinstance(cir_stat, bool):  # cir_statがFalseでないなら、円を描画
         cx, cy, R = cir_stat[0], cir_stat[1], cir_stat[2]
@@ -391,7 +390,7 @@ def show_circle_simple(
         )  # 結果の円を描画
         ax.add_patch(circle)  ###
     if len(spots) > 0:
-        x, y = zip(*spots)
+        x, y = zip(*spots, strict=False)
         ax.scatter(
             x,
             y,
@@ -402,10 +401,7 @@ def show_circle_simple(
             edgecolors="white",
         )
     # ウィンドウ全体の上部に大きく表示
-    if img_path:
-        img_name = os.path.basename(img_path)
-    else:
-        img_name = "Unknown"
+    img_name = pathlib.Path(img_path).name if img_path else "Unknown"
     # is_last が True なら "Last"、それ以外は数値を表示
     iter_text = "Last" if is_last else str(iteration_count)
     fig.suptitle(
@@ -440,7 +436,7 @@ def MIN2_ignore_sunspots(
     show: bool = False,
     debug: bool = False,
     img_path: pathlib.Path|str = "",
-    show_simple=False,
+    show_simple: bool = False,
 ) -> tuple[tuple[float, float], float]:
     """黒点（サンスポット）による影響を除外しながら、最小二乗法により太陽の最終的な近似円（中心と半径）を検出します。
 
@@ -457,7 +453,8 @@ def MIN2_ignore_sunspots(
         img_path (Union[pathlib.Path,str]): 処理する画像のファイルパス。デフォルトは空文字列です。
         show_simple (bool): 描画時に詳細なグラフを省いたシンプルな表示形式を使用するかどうか。デフォルトは False です。
 
-    Returns:
+    Returns
+    -------
         tuple[tuple[float, float], float]: 最終的に算出された円の中心X座標(cx)、中心Y座標(cy)、および半径(r)のタプル。
     """
     if isinstance(img_path,str):
@@ -507,9 +504,9 @@ def MIN2_ignore_sunspots(
 
     all_sunspots=[]
     safe_points=spots
-    for iter in range(iter_cycles+2):
+    for iteration_index in range(iter_cycles + 2):
         if debug:
-            print(f"iter: {iter}")
+            print(f"iter: {iteration_index}")
         outside_spots = []
         inside_spots = []
         for point in safe_points:
@@ -592,17 +589,17 @@ if __name__ == "__main__":
 
         dirpath = askdirectory(title="フォルダを選択してください")
         print(f"[INFO]:dir={dirpath}")
-        import glob
-        import os
-
         patterns = ("*.jpg", "*.jpeg", "*.png", "*.tiff")
-        files = []
-        for p in patterns:
-            files.extend(glob.glob(os.path.join(dirpath, p)))
-        for file in files:
-            img = cv2.imread(file, cv2.IMREAD_UNCHANGED)
+        selected_dir = pathlib.Path(dirpath)
+        image_paths = [
+            image_path
+            for pattern in patterns
+            for image_path in selected_dir.glob(pattern)
+        ]
+        for image_path in image_paths:
+            img = cv2.imread(str(image_path), cv2.IMREAD_UNCHANGED)
             if img is None:
-                print(f"[ERROR]:Failed to read image: {file}")
+                print(f"[ERROR]:Failed to read image: {image_path}")
                 break
             (cx,cy),r = MIN2_ignore_sunspots(img, show=False, debug=False, limb_wigth=60)
             result=cx,cy,r
@@ -617,7 +614,7 @@ if __name__ == "__main__":
 
         start = time()
         img = cv2.imread(picpath, cv2.IMREAD_UNCHANGED)
-        if not img is None:
+        if img is not None:
             print(
                 f"[INFO]:result{MIN2_ignore_sunspots(img, show=True, debug=True, img_path=picpath,show_simple=True)}"
             )

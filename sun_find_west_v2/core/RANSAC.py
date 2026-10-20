@@ -1,11 +1,13 @@
-version = 1.00
+"""RANSAC を用いて太陽像の移動方向と速度ベクトルを推定する。"""
 
 import logging
 import traceback
 
+version = 1.00
+
 logger = logging.getLogger(__name__)
 
-if "__main__" == __name__:
+if __name__ == "__main__":
     logger.info("--- starting as main process ---")
 else:
     logger.info("--- starting as module process ---")
@@ -34,16 +36,19 @@ def calculate_west_angle_robust(
 
     デカルト座標系（右: 0度、上: 90度、左: 180/-180度、下: -90度）
 
-    Parameters:
+    Parameters
+    ----------
         p_lst: [[x1, y1], [x2, y2], ...] のような2次元座標のリストまたはndarray
         time_stomps: 各点のタイムスタンプ（任意）。指定しない場合は等間隔(0, 1, 2...)として扱う
 
-    Returns:
+    Returns
+    -------
         Optional[Tuple[float, Tuple[float, float]]]:
             - angle_deg (float): 移動方向の角度（-180 ~ 180度）
             - (vy, vx) (Tuple[float, float]): y方向およびx方向の推定速度
 
-    Raises:
+    Raises
+    ------
         Exception: 与えられた点の数が2つ未満で線を近似できない場合に例外を発生させる。
     """
     points = np.asarray(p_lst, dtype=np.float64)
@@ -67,12 +72,12 @@ def calculate_west_angle_robust(
     ransac_x = RANSACRegressor(random_state=42)
     ransac_x.fit(t, x)
     # estimator_ は学習済みの LinearRegression インスタンス
-    vx: float = float(ransac_x.estimator_.coef_[0])
+    vx: float = float(ransac_x.estimator_.coef_[0])  # pyright: ignore[reportAttributeAccessIssue]
 
     # y方向の速度(傾き)をRANSACで推定
     ransac_y = RANSACRegressor(random_state=42)
     ransac_y.fit(t, y)
-    vy: float = float(ransac_y.estimator_.coef_[0])
+    vy: float = float(ransac_y.estimator_.coef_[0])  # pyright: ignore[reportAttributeAccessIssue]
 
     # ベクトルからラジアン・度数法へ変換
     angle_rad: float = math.atan2(vy, vx)

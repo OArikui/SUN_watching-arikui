@@ -50,7 +50,11 @@ def main() -> None:
         sys.path.insert(0, str(PACKAGE_DIR))
 
     # main.py 側と同じ import 名(config.*)で読み込む
-    from config.loader import DEFAULT_CONFIG_PATH, ConfigError, load_config
+    from config.loader import (  # pyright: ignore[reportMissingImports]
+        DEFAULT_CONFIG_PATH,
+        ConfigError,
+        load_config,
+    )
 
     config_path = args.config or DEFAULT_CONFIG_PATH
     try:
@@ -59,7 +63,7 @@ def main() -> None:
         sys.exit(f"[run.py] {e}")
     print(f"[run.py] config={config_path}")
 
-    from main import main as run_main
+    from main import main as run_main  # pyright: ignore[reportMissingImports]
 
     run_main(config)
 

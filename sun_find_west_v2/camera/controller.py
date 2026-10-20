@@ -1,25 +1,49 @@
+"""ZWO ASIカメラの初期化、接続、設定を管理するモジュール。"""
+
 import logging
-import traceback
+import time
+from collections.abc import Mapping
+from pathlib import Path
+from typing import Any, Protocol
 
 logger = logging.getLogger(__name__)
 
-if "__main__" == __name__:
+
+class CameraControlsProtocol(Protocol):
+    """カメラ設定関数が必要とする操作を定義する。"""
+
+    def get_camera_property(self) -> Mapping[str, Any]:
+        """カメラの基本プロパティを返す。"""
+        ...
+
+    def set_roi_format(
+        self,
+        width: int | None = None,
+        height: int | None = None,
+        bins: int = 1,
+        image_type: int = 0,
+        start_x: int = 0,
+        start_y: int = 0,
+    ) -> None:
+        """ROI の形式を設定する。"""
+        ...
+
+    def get_controls(self) -> Mapping[int, object]:
+        """利用可能なカメラ制御項目を返す。"""
+        ...
+
+    def set_control_value(
+        self, control_type: int, value: int | float, auto: bool = False
+    ) -> None:
+        """指定したカメラ制御項目を更新する。"""
+        ...
+
+if __name__ == "__main__":
     logger.info("--- starting as main process ---")
 else:
     logger.info("--- starting as module process ---")
 
-try:
-    import time
-    from pathlib import Path
-
-except ImportError:
-    logger.error("Failed to import standard module")
-    logger.error(traceback.format_exc())
-    raise
-else:
-    logger.info("standard modules imported successfully")
-
-type VideoDummyCameraType = VideoDummyCamera
+logger.info("standard modules imported successfully")
 
 try:
     from camera.vid_dummy import ZWOASI_AVAILABLE, VideoDummyCamera, asi
@@ -31,16 +55,27 @@ except ImportError:
 def connect_camera(
     dll_path: Path, use_dummy: bool
 ) -> asi.Camera | VideoDummyCamera | None:
-    """
-    ASIカメラの初期化と接続待機を行うモジュール
+    """ASIカメラを初期化し、接続されるまで待機する。
 
-    Args:
-        dll_path: ASICamera2.dll のパス
-        use_dummy: True ならダミーカメラを返す(実機接続処理は行わない)。
-            False なら実機ASIカメラに接続する。zwoasi が無い場合は RuntimeError。
-            この値は run.py が決める。ここで自動判定やキー入力による切替はしない。
-    """
+    Parameters
+    ----------
+    dll_path : Path
+        ASICamera2.dll のパス。
+    use_dummy : bool
+        True ならダミーカメラを返し、実機への接続処理は行わない。
+        False なら実機ASIカメラに接続する。zwoasi が無い場合は RuntimeError を送出する。
+        この値は run.py が決め、自動判定やキー入力による切替は行わない。
 
+    Returns
+    -------
+    asi.Camera | VideoDummyCamera | None
+        接続されたカメラ。DLL が見つからない場合は None。
+
+    Raises
+    ------
+    RuntimeError
+        実機モードで zwoasi が利用できない場合。
+    """
     if use_dummy:
         logger.info("ダミーモードとして接続処理をskipします")
         return VideoDummyCamera()
@@ -72,8 +107,7 @@ def connect_camera(
             asi.init(str(dll_path))
         logger.info("ASI SDK initialized successfully.")
     except (asi.ZWO_Error, OSError) as e:
-        # ASI SDK固有のエラーやOS関連のエラーを捕捉
-        logger.error(f"Failed to initialize ASI SDK (architecture mismatch?): {e}")
+        logger.error("Failed to initialize ASI SDK (architecture mismatch?): %s", e)
         raise
 
     # 3. カメラ接続の待機ループ
@@ -88,14 +122,14 @@ def connect_camera(
                 # list_cameras が失敗する可能性があるため空リストにする
                 cameras = []
 
-            if len(cameras) > 0:
-                logger.debug(f"Camera(s) detected (Count: {len(cameras)})")
-                logger.debug(f"Available cameras: {cameras}")
+            if cameras:
+                logger.debug("Camera(s) detected (Count: %s)", len(cameras))
+                logger.debug("Available cameras: %s", cameras)
                 camera_index = 0
                 break
-            else:
-                print(".", end="", flush=True)
-                time.sleep(1)
+
+            print(".", end="", flush=True)
+            time.sleep(1)
     except KeyboardInterrupt:
         logger.info("Connection wait interrupted by user.")
         raise
@@ -105,7 +139,7 @@ def connect_camera(
     try:
         camera = asi.Camera(camera_index)
         camera_info = camera.get_camera_property()
-        logger.debug(f"Selected camera: {camera_info['Name']}")
+        logger.debug("Selected camera: %s", camera_info["Name"])
 
         # 汎用的な基本設定
         camera.set_control_value(asi.ASI_BANDWIDTHOVERLOAD, 40)
@@ -113,12 +147,11 @@ def connect_camera(
         logger.info("Camera configured successfully.")
         return camera
     except asi.ZWO_Error as e:
-        logger.error(f"ASI error occurred during camera initialization: {e}")
+        logger.error("ASI error occurred during camera initialization: %s", e)
         raise
-    except Exception as e:
+    except Exception:
         # その他の予期しない例外はログに記録して終了
-        logger.error("Unexpected error initializing camera: %s", traceback.format_exc())
-        logger.error(f"Unexpected error occurred during camera initialization: {e}")
+        logger.exception("Unexpected error initializing camera")
         raise
 
 
@@ -146,11 +179,15 @@ control_map = {
 }
 
 
-def apply_camera_config(cam:asi.Camera | VideoDummyCamera, config: dict) -> None:
-    """ZWO ASIカメラの各種パラメータを一括で設定する関数
+def apply_camera_config(cam: CameraControlsProtocol, config: dict) -> None:
+    """ZWO ASIカメラの各種パラメータを一括で設定する。
 
-    cam: 初期化済みの zwoasi.Camera インスタンス
-    config: パラメータ設定辞書
+    Parameters
+    ----------
+    cam : CameraControlsProtocol
+        初期化済みのカメラ。
+    config : dict
+        カメラの各種パラメータを格納した辞書。
     """
     props = cam.get_camera_property()
 
@@ -160,7 +197,7 @@ def apply_camera_config(cam:asi.Camera | VideoDummyCamera, config: dict) -> None
     height = config.get("height", "max")
     if height == "max":
         height = props["MaxHeight"]
-    bins = config.get("bins",1)
+    bins = config.get("bins", 1)
     img_type_str = str(config.get("img_type", "RAW8")).upper()
     img_type = IMG_TYPE_MAP.get(img_type_str, asi.ASI_IMG_RAW8)
 
@@ -171,54 +208,45 @@ def apply_camera_config(cam:asi.Camera | VideoDummyCamera, config: dict) -> None
     for key, control_type in control_map.items():
         if key in config:
             if control_type in available_controls:
-                try:
-                    val = config[key]
-                except KeyError:
-                    logger.warning(
-                        f"__ENG{key}が設定されていません。カメラの初期値を採用します。"
-                    )
-                    continue
+                val = config[key]
                 if isinstance(val, bool):
                     val = int(val)
                 try:
                     cam.set_control_value(control_type, val)
                 except asi.ZWO_Error:
                     logger.exception(
-                        f" __ENG{key} の設定に失敗しました (範囲外の値などの可能性)"
+                        "__ENG%s の設定に失敗しました (範囲外の値などの可能性)", key
                     )
             else:
-                logger.warning(f"__ENGこのカメラは{key}に対応していません")
+                logger.warning("__ENGこのカメラは%sに対応していません", key)
 
     logger.info("__sucessful set camera config")
 
 
-def handle_config(cam: asi.Camera, key: int, val: float) -> None:
+def handle_config(cam: CameraControlsProtocol, key: int, val: float) -> None:
+    """指定された ASI コントロールを更新する。
+
+    利用可能な主なキーは ``ASI_EXPOSURE``、``ASI_GAIN``、``ASI_OFFSET``、
+    ``ASI_BRIGHTNESS``、``ASI_GAMMA``、``ASI_WB_R``、``ASI_WB_B``、
+    ``ASI_BANDWIDTHOVERLOAD``、``ASI_HIGH_SPEED_MODE``、``ASI_HARDWARE_BIN``、
+    ``ASI_MONO_BIN``、``ASI_FLIP``、``ASI_AUTO_MAX_GAIN``、``ASI_AUTO_MAX_EXP``、
+    ``ASI_AUTO_TARGET_BRIGHTNESS``、``ASI_TARGET_TEMP``、``ASI_COOLER_ON``、
+    ``ASI_FAN_ON``、``ASI_ANTI_DEW_HEATER``。
+
+    Parameters
+    ----------
+    cam : CameraControlsProtocol
+        設定対象のカメラ。
+    key : int
+        ASI コントロール ID。
+    val : float
+        設定する値。
     """
-    - 利用可能な変数 -
-    ASI_EXPOSURE
-    ASI_GAIN
-    ASI_OFFSET
-    ASI_BRIGHTNESS
-    ASI_GAMMA
-    ASI_WB_R
-    ASI_WB_B
-    ASI_BANDWIDTHOVERLOAD
-    ASI_HIGH_SPEED_MODE
-    ASI_HARDWARE_BIN
-    ASI_MONO_BIN
-    ASI_FLIP
-    ASI_AUTO_MAX_GAIN
-    ASI_AUTO_MAX_EXP
-    ASI_AUTO_TARGET_BRIGHTNESS
-    ASI_TARGET_TEMP
-    ASI_COOLER_ON
-    ASI_FAN_ON
-    ASI_ANTI_DEW_HEATER"""
     try:
         cam.set_control_value(key, int(val))
-        logger.debug(f"{key} updated to: {int(val)}")
+        logger.debug("%s updated to: %s", key, int(val))
     except asi.ZWO_Error as e:
-        logger.error(f"Failed to update {key}: {e}")
+        logger.error("Failed to update %s: %s", key, e)
 
 
 logger.info("--- finish ---")

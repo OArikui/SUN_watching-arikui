@@ -22,6 +22,7 @@ def _write(tmp_path: Path, data: dict) -> Path:
 
 
 def test_shipped_config_is_valid() -> None:
+    """同梱の設定ファイルがスキーマを満たすことを確認する。"""
     config = load_config()
     assert config["Camera"]["basic_parameters"]["exposure"] == 100
     assert config["Run"]["camera_source"]["dummy_camera"] is False
@@ -29,6 +30,7 @@ def test_shipped_config_is_valid() -> None:
 
 
 def test_valid_override(tmp_path: Path, base: dict) -> None:
+    """妥当な設定ファイルの上書きを読み込めることを確認する。"""
     base["Run"]["camera_source"]["dummy_camera"] = True
     assert load_config(_write(tmp_path, base))["Run"]["camera_source"]["dummy_camera"] is True
 
@@ -48,24 +50,28 @@ def test_valid_override(tmp_path: Path, base: dict) -> None:
 def test_invalid_value_is_rejected(
     tmp_path: Path, base: dict, section: str, group: str, key: str, value: object
 ) -> None:
+    """値が制約に違反している場合に設定エラーになることを確認する。"""
     base[section][group][key] = value
     with pytest.raises(ConfigError, match=f"{section}.{group}.{key}"):
         load_config(_write(tmp_path, base))
 
 
 def test_missing_key_is_rejected(tmp_path: Path, base: dict) -> None:
+    """必須キーの欠落を検出することを確認する。"""
     del base["Camera"]["basic_parameters"]["gain"]
     with pytest.raises(ConfigError, match="'gain' is a required property"):
         load_config(_write(tmp_path, base))
 
 
 def test_unknown_key_is_rejected(tmp_path: Path, base: dict) -> None:
+    """未定義キーを拒否することを確認する。"""
     base["Camera"]["basic_parameters"]["gian"] = 0
     with pytest.raises(ConfigError, match="gian"):
         load_config(_write(tmp_path, base))
 
 
 def test_all_errors_are_reported(tmp_path: Path, base: dict) -> None:
+    """複数の設定違反を一度に報告することを確認する。"""
     broken = copy.deepcopy(base)
     broken["Camera"]["basic_parameters"]["exposure"] = 5
     broken["Camera"]["basic_parameters"]["gain"] = 999
@@ -76,6 +82,7 @@ def test_all_errors_are_reported(tmp_path: Path, base: dict) -> None:
 
 
 def test_unquoted_hash_color_is_rejected(tmp_path: Path) -> None:
+    """引用符のない色指定が無効と判定されることを確認する。"""
     text = DEFAULT_CONFIG_PATH.read_text(encoding="utf-8").replace('"#FFFFFF"', "#FFFFFF")
     path = tmp_path / "config.yaml"
     path.write_text(text, encoding="utf-8")
@@ -84,6 +91,7 @@ def test_unquoted_hash_color_is_rejected(tmp_path: Path) -> None:
 
 
 def test_invalid_yaml(tmp_path: Path) -> None:
+    """構文が不正な YAML を拒否することを確認する。"""
     path = tmp_path / "config.yaml"
     path.write_text("Camera: [unclosed", encoding="utf-8")
     with pytest.raises(ConfigError, match="YAML"):
@@ -91,11 +99,13 @@ def test_invalid_yaml(tmp_path: Path) -> None:
 
 
 def test_missing_file(tmp_path: Path) -> None:
+    """存在しない設定ファイルを拒否することを確認する。"""
     with pytest.raises(ConfigError):
         load_config(tmp_path / "nope.yaml")
 
 
 def test_empty_file(tmp_path: Path) -> None:
+    """空の設定ファイルを拒否することを確認する。"""
     path = tmp_path / "config.yaml"
     path.write_text("", encoding="utf-8")
     with pytest.raises(ConfigError):

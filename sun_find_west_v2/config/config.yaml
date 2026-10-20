@@ -37,7 +37,7 @@ Camera:
 Run:
   camera_source:
     # ダミーカメラ(動画ファイル再生)を使う。true=ダミー, false=実機ASIカメラ(zwoasi必須)
-    dummy_camera: false
+    dummy_camera: true
 
 sun_find_west_v2:
   Analyzer:
