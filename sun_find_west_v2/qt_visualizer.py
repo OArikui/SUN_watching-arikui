@@ -7,8 +7,19 @@ import time
 from collections.abc import Callable
 
 import numpy as np
-from PyQt6.QtCore import QPointF, Qt
-from PyQt6.QtGui import QCloseEvent, QColor, QImage, QPainter, QPen, QPixmap, QResizeEvent
+from PyQt6.QtCore import QPointF, QRectF, Qt
+from PyQt6.QtGui import (
+    QCloseEvent,
+    QColor,
+    QImage,
+    QMouseEvent,
+    QPainter,
+    QPaintEvent,
+    QPen,
+    QPixmap,
+    QResizeEvent,
+    QWheelEvent,
+)
 from PyQt6.QtWidgets import (
     QApplication,
     QFrame,
@@ -24,17 +35,131 @@ from PyQt6.QtWidgets import (
 
 
 class _ImageLabel(QLabel):
-    """Scale the image whenever the available feed area changes."""
+    """Display the camera feed and an overview of the current viewport."""
 
-    def __init__(self, on_resize: Callable[[], None]) -> None:
-        """Initialize the resize callback."""
+    def __init__(
+        self,
+        on_resize: Callable[[], None],
+        on_wheel: Callable[[int, QPointF], None],
+        on_mouse_press: Callable[[QPointF, bool], None],
+        on_mouse_move: Callable[[QPointF, bool], None],
+        on_mouse_release: Callable[[], None],
+        on_double_click: Callable[[QPointF], None],
+    ) -> None:
+        """Initialize resize and pointer callbacks."""
         super().__init__()
         self._on_resize = on_resize
+        self._on_wheel = on_wheel
+        self._on_mouse_press = on_mouse_press
+        self._on_mouse_move = on_mouse_move
+        self._on_mouse_release = on_mouse_release
+        self._on_double_click = on_double_click
+        self._minimap_image: QImage | None = None
+        self._minimap_view_rect: tuple[float, float, float, float] | None = None
+        self._minimap_widget_rect: QRectF | None = None
+        self._minimap_image_rect: QRectF | None = None
+        self.setMouseTracking(True)
+
+    def set_minimap_data(
+        self,
+        image: QImage,
+        view_rect: tuple[float, float, float, float],
+    ) -> None:
+        """Update the overview image and its active viewport rectangle."""
+        self._minimap_image = image
+        self._minimap_view_rect = view_rect
+        self.update()
 
     def resizeEvent(self, a0: QResizeEvent | None) -> None:
         """Keep the frame fitted to the current label dimensions."""
         super().resizeEvent(a0)
         self._on_resize()
+
+    def wheelEvent(self, a0: QWheelEvent | None) -> None:
+        """Delegate the mouse wheel to the zoom controller."""
+        if a0 is not None:
+            self._on_wheel(a0.angleDelta().y(), a0.position())
+            a0.accept()
+
+    def mousePressEvent(self, a0: QMouseEvent | None) -> None:
+        """Delegate a click to the pan or overview-map controller."""
+        if a0 is not None:
+            self._on_mouse_press(
+                a0.position(),
+                a0.button() == Qt.MouseButton.LeftButton,
+            )
+            a0.accept()
+
+    def mouseMoveEvent(self, a0: QMouseEvent | None) -> None:
+        """Delegate pointer movement while the left button is held."""
+        if a0 is not None:
+            is_left_down = bool(a0.buttons() & Qt.MouseButton.LeftButton)
+            self._on_mouse_move(a0.position(), is_left_down)
+            a0.accept()
+
+    def mouseReleaseEvent(self, a0: QMouseEvent | None) -> None:
+        """Stop panning when the mouse button is released."""
+        if a0 is not None:
+            if a0.button() == Qt.MouseButton.LeftButton:
+                self._on_mouse_release()
+            a0.accept()
+
+    def mouseDoubleClickEvent(self, a0: QMouseEvent | None) -> None:
+        """Delegate a double click to reset the viewport."""
+        if a0 is not None:
+            self._on_double_click(a0.position())
+            a0.accept()
+
+    def paintEvent(self, a0: QPaintEvent | None) -> None:
+        """Draw the overview map over the camera feed."""
+        super().paintEvent(a0)
+        image = self._minimap_image
+        if image is None or image.isNull():
+            return
+
+        outer = QRectF(12.0, float(self.height()) - 137.0, 174.0, 125.0)
+        inner = QRectF(
+            outer.left() + 6.0,
+            outer.top() + 19.0,
+            outer.width() - 12.0,
+            outer.height() - 25.0,
+        )
+        scale = min(inner.width() / image.width(), inner.height() / image.height())
+        image_width = image.width() * scale
+        image_height = image.height() * scale
+        image_rect = QRectF(
+            inner.left() + (inner.width() - image_width) / 2.0,
+            inner.top() + (inner.height() - image_height) / 2.0,
+            image_width,
+            image_height,
+        )
+        self._minimap_widget_rect = outer
+        self._minimap_image_rect = image_rect
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(QPen(QColor("#52667e"), 1.0))
+        painter.setBrush(QColor(12, 18, 27, 232))
+        painter.drawRoundedRect(outer, 7.0, 7.0)
+        painter.setPen(QColor("#e6edf6"))
+        painter.drawText(QPointF(outer.left() + 8.0, outer.top() + 13.0), "OVERVIEW")
+        painter.fillRect(inner, QColor("#080c12"))
+        painter.drawImage(image_rect, image)
+
+        view = self._minimap_view_rect
+        if view is not None:
+            left, top, view_width, view_height = view
+            active_rect = QRectF(
+                image_rect.left() + left / image.width() * image_rect.width(),
+                image_rect.top() + top / image.height() * image_rect.height(),
+                view_width / image.width() * image_rect.width(),
+                view_height / image.height() * image_rect.height(),
+            )
+            painter.fillRect(active_rect, QColor(115, 190, 255, 38))
+            painter.setPen(QPen(QColor("#9bd2ff"), 2.0))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRect(active_rect)
+        painter.end()
 
 
 class _MainWindow(QMainWindow):
@@ -84,6 +209,11 @@ class Visualizer:
         self._closed = False
         self._latest_image: QImage | None = None
         self._previous_frame_time = time.monotonic()
+        self._zoom_factor = 1.0
+        self._view_center_x = width / 2.0
+        self._view_center_y = height / 2.0
+        self._is_panning = False
+        self._last_pan_position: QPointF | None = None
         self.buttons: dict[str, QPushButton] = {}
         self.sliders: dict[str, QSlider] = {}
         self._metric_labels: dict[str, QLabel] = {}
@@ -144,12 +274,46 @@ class Visualizer:
         feed_header.addStretch(1)
         feed_header.addWidget(self.frame_label)
         feed_layout.addLayout(feed_header)
-        self.image_label = _ImageLabel(self._render_image)
+        self.zoom_label = QLabel("ZOOM 1.0×")
+        self.zoom_label.setObjectName("mutedLabel")
+        self.image_label = _ImageLabel(
+            self._render_image,
+            self._handle_zoom_wheel,
+            self._handle_mouse_press,
+            self._handle_mouse_move,
+            self._handle_mouse_release,
+            self._handle_double_click,
+        )
         self.image_label.setText("Waiting for camera frame")
         self.image_label.setObjectName("imageCanvas")
         self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.image_label.setMinimumSize(600, 470)
+        feed_header.addWidget(self.zoom_label)
         feed_layout.addWidget(self.image_label, 1)
+
+        time_legend = QHBoxLayout()
+        time_legend.setSpacing(8)
+        legend_title = QLabel("TRAJECTORY TIME")
+        legend_title.setObjectName("mutedLabel")
+        earlier_label = QLabel("EARLIER")
+        earlier_label.setObjectName("mutedLabel")
+        gradient_bar = QFrame()
+        gradient_bar.setObjectName("trajectoryGradient")
+        gradient_bar.setMinimumWidth(70)
+        gradient_bar.setFixedHeight(8)
+        gradient_bar.setStyleSheet(
+            "background: qlineargradient(x1:0, y1:0, x2:1, y2:0, "
+            "stop:0 #440154, stop:0.25 #3f5b8a, stop:0.5 #21918c, "
+            "stop:0.75 #5ec962, stop:1 #fde725); border-radius: 4px;"
+        )
+        now_label = QLabel("NOW")
+        now_label.setObjectName("mutedLabel")
+        time_legend.addWidget(legend_title)
+        time_legend.addStretch(1)
+        time_legend.addWidget(earlier_label)
+        time_legend.addWidget(gradient_bar, 1)
+        time_legend.addWidget(now_label)
+        feed_layout.addLayout(time_legend)
         body.addWidget(feed_panel, 3)
 
         side_panel = self._make_panel()
@@ -265,6 +429,185 @@ class Visualizer:
     def _mark_closed(self) -> None:
         """Record that the dashboard is closed."""
         self._closed = True
+
+    def _view_size_for_zoom(self, zoom: float) -> tuple[float, float]:
+        """Return the source-image dimensions visible at a zoom level."""
+        if zoom <= 1.0:
+            return float(self.width), float(self.height)
+        label_width = max(1.0, float(self.image_label.width()))
+        label_height = max(1.0, float(self.image_label.height()))
+        fit_scale = min(label_width / self.width, label_height / self.height)
+        return (
+            min(float(self.width), label_width / (fit_scale * zoom)),
+            min(float(self.height), label_height / (fit_scale * zoom)),
+        )
+
+    def _current_view_rect(self) -> tuple[float, float, float, float]:
+        """Return the source-image rectangle currently visible in the feed."""
+        view_width, view_height = self._view_size_for_zoom(self._zoom_factor)
+        left = min(
+            max(0.0, self._view_center_x - view_width / 2.0),
+            max(0.0, self.width - view_width),
+        )
+        top = min(
+            max(0.0, self._view_center_y - view_height / 2.0),
+            max(0.0, self.height - view_height),
+        )
+        return left, top, view_width, view_height
+
+    def _display_geometry(
+        self,
+    ) -> tuple[float, float, float, float, float, float, float]:
+        """Return the visible image rectangle and its scale/offset in the label."""
+        left, top, view_width, view_height = self._current_view_rect()
+        label_width = max(1.0, float(self.image_label.width()))
+        label_height = max(1.0, float(self.image_label.height()))
+        scale = min(label_width / view_width, label_height / view_height)
+        offset_x = (label_width - view_width * scale) / 2.0
+        offset_y = (label_height - view_height * scale) / 2.0
+        return left, top, view_width, view_height, scale, offset_x, offset_y
+
+    def _label_to_image(self, position: QPointF) -> tuple[float, float]:
+        """Convert a label position to source-image coordinates."""
+        left, top, view_width, view_height, scale, offset_x, offset_y = (
+            self._display_geometry()
+        )
+        x = left + (position.x() - offset_x) / scale
+        y = top + (position.y() - offset_y) / scale
+        return (
+            min(float(self.width), max(0.0, x)),
+            min(float(self.height), max(0.0, y)),
+        )
+
+    def _clamp_view_center(self) -> None:
+        """Keep the viewport inside the source image."""
+        view_width, view_height = self._view_size_for_zoom(self._zoom_factor)
+        self._view_center_x = min(
+            self.width - view_width / 2.0,
+            max(view_width / 2.0, self._view_center_x),
+        )
+        self._view_center_y = min(
+            self.height - view_height / 2.0,
+            max(view_height / 2.0, self._view_center_y),
+        )
+
+    def _handle_zoom_wheel(self, delta: int, position: QPointF) -> None:
+        """Zoom around the pointer so the area beneath it remains anchored."""
+        if delta == 0 or self._latest_image is None:
+            return
+        old_left, old_top, old_width, old_height = self._current_view_rect()
+        image_x, image_y = self._label_to_image(position)
+        fraction_x = min(1.0, max(0.0, (image_x - old_left) / old_width))
+        fraction_y = min(1.0, max(0.0, (image_y - old_top) / old_height))
+        factor = 1.2 if delta > 0 else 1.0 / 1.2
+        self._zoom_factor = min(12.0, max(1.0, self._zoom_factor * factor))
+        new_width, new_height = self._view_size_for_zoom(self._zoom_factor)
+        self._view_center_x = image_x - (fraction_x - 0.5) * new_width
+        self._view_center_y = image_y - (fraction_y - 0.5) * new_height
+        self._clamp_view_center()
+        self._render_image()
+
+    def _handle_mouse_press(self, position: QPointF, is_left_button: bool) -> None:
+        """Center the viewport from the overview map or begin dragging."""
+        if not is_left_button:
+            return
+        map_rect = self.image_label._minimap_widget_rect
+        image_rect = self.image_label._minimap_image_rect
+        if map_rect is not None and map_rect.contains(position):
+            if image_rect is not None and image_rect.contains(position):
+                self._view_center_x = (
+                    (position.x() - image_rect.left()) / image_rect.width() * self.width
+                )
+                self._view_center_y = (
+                    (position.y() - image_rect.top()) / image_rect.height() * self.height
+                )
+                self._clamp_view_center()
+                self._render_image()
+            return
+        if self._zoom_factor <= 1.0:
+            return
+        self._is_panning = True
+        self._last_pan_position = position
+        self.image_label.setCursor(Qt.CursorShape.ClosedHandCursor)
+
+    def _handle_mouse_move(self, position: QPointF, is_left_down: bool) -> None:
+        """Pan the viewport while dragging the camera feed."""
+        if not self._is_panning or not is_left_down or self._last_pan_position is None:
+            return
+        delta_x = position.x() - self._last_pan_position.x()
+        delta_y = position.y() - self._last_pan_position.y()
+        _, _, _, _, scale, _, _ = self._display_geometry()
+        if scale > 0.0:
+            self._view_center_x -= delta_x / scale
+            self._view_center_y -= delta_y / scale
+            self._clamp_view_center()
+            self._render_image()
+        self._last_pan_position = position
+
+    def _handle_mouse_release(self) -> None:
+        """Finish dragging and restore the pointer cursor."""
+        self._is_panning = False
+        self._last_pan_position = None
+        cursor = (
+            Qt.CursorShape.OpenHandCursor
+            if self._zoom_factor > 1.0
+            else Qt.CursorShape.ArrowCursor
+        )
+        self.image_label.setCursor(cursor)
+
+    def _handle_double_click(self, position: QPointF) -> None:
+        """Reset the zoom and return to the full frame."""
+        del position
+        self._zoom_factor = 1.0
+        self._view_center_x = self.width / 2.0
+        self._view_center_y = self.height / 2.0
+        self.image_label.setCursor(Qt.CursorShape.ArrowCursor)
+        self._render_image()
+
+    @staticmethod
+    def _trajectory_color(progress: float) -> QColor:
+        """Map normalized trajectory time to a Viridis-like color."""
+        palette = (
+            (68, 1, 84),
+            (72, 35, 116),
+            (64, 67, 135),
+            (52, 94, 141),
+            (41, 120, 142),
+            (32, 144, 140),
+            (34, 167, 132),
+            (68, 190, 112),
+            (121, 209, 81),
+            (189, 222, 38),
+            (253, 231, 37),
+        )
+        value = min(1.0, max(0.0, float(progress))) * (len(palette) - 1)
+        lower = int(value)
+        upper = min(len(palette) - 1, lower + 1)
+        fraction = value - lower
+        start = palette[lower]
+        end = palette[upper]
+        channels = tuple(
+            round(first + (last - first) * fraction)
+            for first, last in zip(start, end, strict=True)
+        )
+        return QColor(channels[0], channels[1], channels[2])
+
+    @staticmethod
+    def _normalise_trajectory_time(
+        points: np.ndarray,
+        timestamps: np.ndarray | None,
+    ) -> np.ndarray:
+        """Return a 0–1 chronology axis, falling back to point order."""
+        count = len(points)
+        if count <= 1:
+            return np.zeros(count, dtype=float)
+        if timestamps is not None:
+            values = np.asarray(timestamps, dtype=float).reshape(-1)
+            if values.size == count and np.all(np.isfinite(values)):
+                span = float(values.max() - values.min())
+                if span > 0.0:
+                    return (values - values.min()) / span
+        return np.linspace(0.0, 1.0, count)
 
     @staticmethod
     def _array_to_qimage(frame: np.ndarray) -> QImage:
@@ -405,6 +748,7 @@ class Visualizer:
         robust_vector: tuple[float, float],
         frame_idx: int | None = None,
         total_frames: int | str | None = None,
+        recent_timestamps: np.ndarray | None = None,
     ) -> None:
         """Refresh the camera image, trajectory overlay and metric labels."""
         image = self._array_to_qimage(img).convertToFormat(QImage.Format.Format_RGB888)
@@ -454,14 +798,27 @@ class Visualizer:
                         ),
                     )
 
-        # Draw the trajectory last so it stays visually above the direction vector.
+        # Draw the trajectory last and color each segment by its capture time.
         if points.ndim == 2 and points.shape[1] >= 2 and len(points) > 1:
-            painter.setPen(QPen(QColor("#55d7df"), 2.0))
-            for first, second in zip(points[:-1], points[1:], strict=True):
+            time_axis = self._normalise_trajectory_time(points, recent_timestamps)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            for index, (first, second) in enumerate(
+                zip(points[:-1], points[1:], strict=True)
+            ):
+                progress = float((time_axis[index] + time_axis[index + 1]) / 2.0)
+                painter.setPen(QPen(self._trajectory_color(progress), 2.6))
                 painter.drawLine(
                     QPointF(float(first[0]), float(first[1])),
                     QPointF(float(second[0]), float(second[1])),
                 )
+            painter.setPen(QPen(self._trajectory_color(0.0), 1.0))
+            painter.setBrush(self._trajectory_color(0.0))
+            painter.drawEllipse(QPointF(float(points[0, 0]), float(points[0, 1])), 3.0, 3.0)
+            painter.setPen(QPen(self._trajectory_color(1.0), 1.0))
+            painter.setBrush(self._trajectory_color(1.0))
+            painter.drawEllipse(
+                QPointF(float(points[-1, 0]), float(points[-1, 1])), 4.0, 4.0
+            )
 
         painter.end()
         self._latest_image = image
@@ -506,15 +863,43 @@ class Visualizer:
         )
 
     def _render_image(self) -> None:
-        """Scale the latest frame to fit the available feed area."""
-        if self._latest_image is None:
+        """Render the current crop and update the overview viewport rectangle."""
+        latest_image = self._latest_image
+        if latest_image is None:
             return
-        scaled = self._latest_image.scaled(
+        left, top, view_width, view_height = self._current_view_rect()
+        if self._zoom_factor <= 1.0:
+            crop = latest_image
+            visible_rect = (
+                0.0,
+                0.0,
+                float(latest_image.width()),
+                float(latest_image.height()),
+            )
+        else:
+            x0 = max(0, min(self.width - 1, int(round(left))))
+            y0 = max(0, min(self.height - 1, int(round(top))))
+            crop_width = max(1, min(self.width - x0, int(round(view_width))))
+            crop_height = max(1, min(self.height - y0, int(round(view_height))))
+            crop = latest_image.copy(x0, y0, crop_width, crop_height)
+            visible_rect = (
+                float(x0),
+                float(y0),
+                float(crop_width),
+                float(crop_height),
+            )
+        scaled = crop.scaled(
             self.image_label.size(),
             Qt.AspectRatioMode.KeepAspectRatio,
             Qt.TransformationMode.SmoothTransformation,
         )
         self.image_label.setPixmap(QPixmap.fromImage(scaled))
+        self.image_label.set_minimap_data(latest_image, visible_rect)
+        self.zoom_label.setText(f"ZOOM {self._zoom_factor:.1f}×")
+        if self._zoom_factor > 1.0 and not self._is_panning:
+            self.image_label.setCursor(Qt.CursorShape.OpenHandCursor)
+        elif not self._is_panning:
+            self.image_label.setCursor(Qt.CursorShape.ArrowCursor)
 
     def is_alive(self) -> bool:
         """Return whether the dashboard is still open."""

@@ -507,6 +507,7 @@ class SunTrackerApp:
                             vectorYX,  # pyright:ignore [reportPossiblyUnboundVariable]
                             frame_idx=self.frame_count,
                             total_frames="∞",
+                            recent_timestamps=recent_timestamps,
                         )
                     except Exception as e:
                         logger.warning(f"Visualizer update failed: {e}")
